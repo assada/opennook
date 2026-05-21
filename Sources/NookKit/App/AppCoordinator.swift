@@ -110,6 +110,7 @@ public final class AppCoordinator: ObservableObject {
         registerGlobalHotkey()
         bindHotkeyRegistration()
         bindNookDragSession()
+        bindSurfaceVisibility()
 
         // Cold-launch greeting: compact the chrome, then fire a one-shot shimmer along the
         // perimeter so the user sees the app is awake. Awaiting `compact()` first puts the
@@ -153,7 +154,7 @@ public final class AppCoordinator: ObservableObject {
                     // Re-place whichever way the chrome is currently showing. A hidden
                     // nook needs nothing — its next expand/compact rebuilds on the new
                     // screen via `screenProvider`.
-                    if self.appState.isNookVisible {
+                    if self.nook.state == .expanded {
                         await self.nook.expand(on: screen)
                     } else if self.nook.windowController != nil {
                         await self.nook.compact(on: screen)
@@ -262,6 +263,20 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
+    /// Mirrors the surface's live ``NookState`` onto `appState.isNookVisible`. This is the
+    /// single source of truth for "is the nook expanded" — it catches hover- and
+    /// drag-driven transitions, which coordinator-initiated show/hide cannot.
+    private func bindSurfaceVisibility() {
+        nook.$state
+            .map { $0 == .expanded }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] expanded in
+                self?.appState.isNookVisible = expanded
+            }
+            .store(in: &cancellables)
+    }
+
     private func bindNookDragSession() {
         nook.$isDragInFlight
             .receive(on: RunLoop.main)
@@ -279,7 +294,9 @@ public final class AppCoordinator: ObservableObject {
 
     public func toggleNook() {
         appState.resetTransientStatus()
-        if appState.isNookVisible {
+        // Decide off the surface's live state, not the mirror — a hover-expanded nook
+        // must toggle closed even though no coordinator call opened it.
+        if nook.state == .expanded {
             hideNook()
         } else {
             showNook()
@@ -288,7 +305,6 @@ public final class AppCoordinator: ObservableObject {
 
     public func showNook() {
         appState.resetTransientStatus()
-        appState.isNookVisible = true
         Task {
             nook.staysExpandedOnHoverExit = appState.keepNookOpen
             await nook.expand()
@@ -313,7 +329,6 @@ public final class AppCoordinator: ObservableObject {
     }
 
     public func hideNook() {
-        appState.isNookVisible = false
         Task {
             await nook.compact()
         }

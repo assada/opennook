@@ -12,11 +12,12 @@ import UniformTypeIdentifiers
 ///
 /// Persists a **bookmark**, not a raw path, so a shelved file survives being moved or
 /// renamed between launches. `resolveURL()` turns the bookmark back into a live URL;
-/// it returns `nil` once the file is gone (see ``ShelfStore/purgeMissing()``).
+/// it returns `nil` only when the file genuinely can't be reached.
 ///
-/// The framework demo app is not sandboxed, so a plain (non-security-scoped) bookmark
-/// is sufficient. A sandboxed host would need security-scoped bookmarks — the `bookmark`
-/// field is deliberately opaque `Data` so that strategy can change without an API break.
+/// The bookmark is created **security-scoped** when possible, so a sandboxed host (which
+/// only gets file access via the user's drop) can still resolve the file on a later
+/// launch. In a non-sandboxed host the security scope is simply inert. `bookmark` is
+/// deliberately opaque `Data` so the strategy can evolve without an API break.
 public struct ShelfItem: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     /// File name without extension — what the chip label shows.
@@ -31,13 +32,7 @@ public struct ShelfItem: Identifiable, Codable, Hashable, Sendable {
     /// Builds an item from a file URL, capturing a bookmark. Returns `nil` if the URL
     /// can't be bookmarked (e.g. it doesn't exist).
     public static func make(from url: URL) -> ShelfItem? {
-        guard let bookmark = try? url.bookmarkData(
-            options: [],
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        ) else {
-            return nil
-        }
+        guard let bookmark = Self.bookmarkData(for: url) else { return nil }
         let type = UTType(filenameExtension: url.pathExtension)?.identifier
             ?? UTType.data.identifier
         return ShelfItem(
@@ -50,14 +45,70 @@ public struct ShelfItem: Identifiable, Codable, Hashable, Sendable {
         )
     }
 
-    /// Resolves the bookmark to a current URL, or `nil` if the file can no longer be found.
+    /// Resolves the bookmark to a current URL, or `nil` if the file can no longer be
+    /// reached. A `nil` here is **not** proof the file was deleted — under the App
+    /// Sandbox it can also mean access was lost — so callers must not treat it as a
+    /// deletion signal (see ``ShelfStore/purgeMissing()``).
     public func resolveURL() -> URL? {
-        var isStale = false
-        return try? URL(
-            resolvingBookmarkData: bookmark,
-            options: [],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
+        resolved()?.url
+    }
+
+    /// Resolves the bookmark, also reporting whether the bookmark has gone stale and
+    /// should be re-created from the returned URL.
+    func resolved() -> (url: URL, isStale: Bool)? {
+        // Try a security-scoped resolution first; fall back to a plain one for bookmarks
+        // captured before security scoping (or in contexts where it isn't available).
+        for options in [BookmarkResolutionOptions.securityScoped, BookmarkResolutionOptions.plain] {
+            var isStale = false
+            if let url = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: options,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ) {
+                return (url, isStale)
+            }
+        }
+        return nil
+    }
+
+    /// Returns a copy whose bookmark has been re-captured from its current location, or
+    /// `nil` if it can't currently be resolved. Used to heal a stale bookmark.
+    func refreshedBookmark() -> ShelfItem? {
+        guard let url = resolveURL(), let fresh = Self.bookmarkData(for: url) else {
+            return nil
+        }
+        return ShelfItem(
+            id: id,
+            displayName: displayName,
+            fileExtension: fileExtension,
+            addedAt: addedAt,
+            bookmark: fresh,
+            typeIdentifier: typeIdentifier
         )
     }
+
+    /// Captures bookmark data for `url`, preferring a security-scoped bookmark and
+    /// falling back to a plain one (security-scoped creation throws when the process
+    /// holds no scoped access to the file, e.g. some non-sandboxed contexts).
+    private static func bookmarkData(for url: URL) -> Data? {
+        if let scoped = try? url.bookmarkData(
+            options: [.withSecurityScope],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        ) {
+            return scoped
+        }
+        return try? url.bookmarkData(
+            options: [],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+    }
+}
+
+/// Bookmark-resolution option sets, tried in order by ``ShelfItem/resolved()``.
+private enum BookmarkResolutionOptions {
+    static let securityScoped: URL.BookmarkResolutionOptions = [.withSecurityScope]
+    static let plain: URL.BookmarkResolutionOptions = []
 }

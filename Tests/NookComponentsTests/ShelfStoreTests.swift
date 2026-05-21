@@ -83,15 +83,37 @@ final class ShelfStoreTests: XCTestCase {
         XCTAssertEqual(second.items.first?.resolveURL()?.standardizedFileURL, url.standardizedFileURL)
     }
 
-    func testPurgeMissingDropsDeletedFile() throws {
+    func testPurgeMissingDropsIndividualDeletedFile() throws {
         let (store, _, _) = freshStore()
-        let url = try makeTempFile()
+        let kept = try makeTempFile()
+        let deleted = try makeTempFile()
+        defer { try? FileManager.default.removeItem(at: kept) }
 
-        store.accept([url])
-        XCTAssertEqual(store.items.count, 1)
+        store.accept([kept, deleted])
+        XCTAssertEqual(store.items.count, 2)
 
-        try FileManager.default.removeItem(at: url)
+        // With a surviving sibling, access is clearly working — so the one genuinely
+        // missing file should be purged.
+        try FileManager.default.removeItem(at: deleted)
         store.purgeMissing()
-        XCTAssertTrue(store.items.isEmpty, "an item whose file is gone should be purged")
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.resolveURL()?.standardizedFileURL, kept.standardizedFileURL)
+    }
+
+    /// Regression: when *every* item fails to resolve — indistinguishable from a
+    /// sandboxed host that lost its file-access grant — the shelf must be preserved,
+    /// not silently wiped.
+    func testPurgeMissingPreservesShelfOnSystemicFailure() throws {
+        let (store, _, _) = freshStore()
+        let first = try makeTempFile()
+        let second = try makeTempFile()
+
+        store.accept([first, second])
+        XCTAssertEqual(store.items.count, 2)
+
+        try FileManager.default.removeItem(at: first)
+        try FileManager.default.removeItem(at: second)
+        store.purgeMissing()
+        XCTAssertEqual(store.items.count, 2, "a total resolution failure must not wipe the shelf")
     }
 }

@@ -25,7 +25,13 @@ public final class AppState: ObservableObject {
     /// the surface (`Nook.screenProvider`) and re-places the chrome when it changes.
     @Published public var displayPreference = NookDisplayPreference.default
     @Published public var keepNookOpen = false
-    @Published public var isNookVisible = false
+
+    /// `true` while the nook surface is expanded. This is a read-only mirror of the
+    /// surface's own ``NookState`` — the coordinator binds it to `Nook.$state`, so it
+    /// stays accurate for hover- and drag-driven transitions too, not just
+    /// coordinator-initiated show/hide. Drive visibility through ``AppCoordinator``,
+    /// never by writing this.
+    @Published public internal(set) var isNookVisible = false
     @Published public var errorMessage: String?
 
     /// `true` while the user is recording a new global hotkey in Settings. The coordinator

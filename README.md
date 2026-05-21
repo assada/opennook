@@ -61,7 +61,6 @@ Everything built on top of `NookSurface` to make it feel like an app:
 - `App/Views/Settings/` — Appearance, Shortcut, Data, and Advanced panels.
 - `App/Views/Shared/` — reusable settings primitives.
 - `System/HotkeyController.swift` — a Carbon-based global hotkey.
-- `System/ClipboardService.swift` — a small utility.
 
 ### `NookComponents` — optional add-ons
 

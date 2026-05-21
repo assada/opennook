@@ -30,6 +30,7 @@ public final class ShelfStore: ObservableObject {
         self.persistenceKey = persistenceKey
         self.defaults = defaults
         load()
+        healStaleBookmarks()
         purgeMissing()
     }
 
@@ -64,15 +65,39 @@ public final class ShelfStore: ObservableObject {
         persist()
     }
 
-    /// Drops items whose bookmark no longer resolves to an existing file. Called once on
-    /// `init`; a host can call it again (e.g. when the shelf surface appears).
+    /// Drops items whose file is genuinely gone. Called once on `init`; a host can call
+    /// it again (e.g. when the shelf surface appears).
+    ///
+    /// A resolution failure is **ambiguous** — under the App Sandbox a lost grant looks
+    /// identical to a deleted file. So purging is conservative: if *every* item fails to
+    /// resolve, that's treated as a systemic access failure and nothing is dropped (this
+    /// is what stops a sandboxed host silently wiping the whole shelf). Individual
+    /// failures are only purged when at least one sibling still resolves — i.e. access
+    /// is working and that one file really is gone.
     public func purgeMissing() {
+        guard !items.isEmpty else { return }
+        let resolutions = items.map { ($0, $0.resolveURL()) }
+        guard resolutions.contains(where: { $0.1 != nil }) else { return }
+
         let before = items.count
-        items.removeAll { item in
-            guard let url = item.resolveURL() else { return true }
-            return !FileManager.default.fileExists(atPath: url.path)
-        }
+        items = resolutions.compactMap { $0.1 == nil ? nil : $0.0 }
         if items.count != before { persist() }
+    }
+
+    /// Re-captures any bookmark that resolved but reported itself stale (file moved
+    /// across volumes, OS bookmark-format migration). Apple's contract is to re-bookmark
+    /// from the resolved URL; left unhealed, a stale bookmark eventually stops resolving.
+    private func healStaleBookmarks() {
+        var changed = false
+        items = items.map { item in
+            guard let resolution = item.resolved(), resolution.isStale,
+                  let refreshed = item.refreshedBookmark() else {
+                return item
+            }
+            changed = true
+            return refreshed
+        }
+        if changed { persist() }
     }
 
     // MARK: - Persistence
