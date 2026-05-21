@@ -18,12 +18,17 @@ let package = Package(
         // trampoline links against — behavior cannot drift between the two
         // launch surfaces.
         .library(name: "NookApp", targets: ["NookApp"]),
+        // Optional Tier 3 add-on components (file shelf, …). A consumer adds this
+        // product to their target's dependencies only when they want it; it is not
+        // pulled in by `NookApp`.
+        .library(name: "NookComponents", targets: ["NookComponents"]),
         // Example apps under `Examples/` — each a single `main.swift` showing one
         // way to build on OpenNook through public API only. Run with `swift run
-        // HelloNook` (or `ClockNook` / `ThemedNook`).
+        // HelloNook` (or `ClockNook` / `ThemedNook` / `ShelfNook`).
         .executable(name: "HelloNook", targets: ["HelloNook"]),
         .executable(name: "ClockNook", targets: ["ClockNook"]),
-        .executable(name: "ThemedNook", targets: ["ThemedNook"])
+        .executable(name: "ThemedNook", targets: ["ThemedNook"]),
+        .executable(name: "ShelfNook", targets: ["ShelfNook"])
     ],
     targets: [
         .target(
@@ -52,6 +57,13 @@ let package = Package(
             dependencies: ["NookApp"],
             path: "Sources/NookExecutable"
         ),
+        .target(
+            // Optional Tier 3 add-on components. Apache-2.0. Depends on NookKit
+            // (for the resolved-theme environment); not part of the default app.
+            name: "NookComponents",
+            dependencies: ["NookKit"],
+            path: "Sources/NookComponents"
+        ),
         .executableTarget(
             name: "HelloNook",
             dependencies: ["NookApp"],
@@ -67,10 +79,20 @@ let package = Package(
             dependencies: ["NookApp"],
             path: "Examples/ThemedNook"
         ),
+        .executableTarget(
+            name: "ShelfNook",
+            dependencies: ["NookApp", "NookComponents"],
+            path: "Examples/ShelfNook"
+        ),
         .testTarget(
             name: "NookKitTests",
             dependencies: ["NookKit", "NookSurface"],
             path: "Tests/NookKitTests"
+        ),
+        .testTarget(
+            name: "NookComponentsTests",
+            dependencies: ["NookComponents"],
+            path: "Tests/NookComponentsTests"
         )
     ]
 )

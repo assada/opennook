@@ -258,7 +258,9 @@ public final class AppCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        nook.onFileDrop = { _ in false }
+        // Route file drops through the host's configured handler (e.g. the
+        // NookComponents file shelf). Absent one, drops are rejected.
+        nook.onFileDrop = configuration.onFileDrop ?? { _ in false }
     }
 
     // MARK: - Nook lifecycle

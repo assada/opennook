@@ -63,6 +63,16 @@ Everything built on top of `NookSurface` to make it feel like an app:
 - `System/HotkeyController.swift` — a Carbon-based global hotkey.
 - `System/ClipboardService.swift` — a small utility.
 
+### `NookComponents` — optional add-ons
+
+Opt-in components built on the layers above — depend on this product only when
+you want one. It is not pulled in by `NookApp`.
+
+- `Shelf/` — a file shelf: drop files onto the notch, they collect in a
+  persistent `ShelfStore`, and you can drag them back out. Render it with
+  `NookShelfView` and wire `ShelfStore.accept` into `NookConfiguration.onFileDrop`.
+  See `Examples/ShelfNook`.
+
 ### The demo app
 
 - `Sources/NookApp/NookApp.swift` — the library entry point shared by both
@@ -107,13 +117,14 @@ cannot drift between them.
 
 ## Example apps
 
-Three single-file examples under `Examples/` show how to build on OpenNook
-through public API only — no forking:
+Single-file examples under `Examples/` show how to build on OpenNook through
+public API only — no forking:
 
 ```sh
 swift run HelloNook    # register one view, go
 swift run ClockNook    # custom home view + a custom compact slot
 swift run ThemedNook   # a host-supplied theme + lifecycle hooks
+swift run ShelfNook    # a drop-files-on-the-notch shelf (NookComponents)
 ```
 
 ## Start your own notch app

@@ -57,6 +57,14 @@ public struct NookConfiguration {
     /// Called when the chrome transitions into the hidden state.
     public var onHide: (() -> Void)?
 
+    /// Handles a file drop on the notch panel. Return `true` to accept the URLs
+    /// (the nook stays expanded so any registration UI is visible), `false` to
+    /// reject. `nil` — the default — rejects all drops.
+    ///
+    /// `NookComponents`' file shelf wires its `ShelfStore.accept` straight into
+    /// this; a host can also route drops through its own import flow.
+    public var onFileDrop: (([URL]) -> Bool)?
+
     /// Creates a configuration matching the framework demo: the placeholder home view,
     /// the default compact glyphs, the live system theme, and no lifecycle callbacks.
     public init() {
