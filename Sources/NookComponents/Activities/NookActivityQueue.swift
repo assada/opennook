@@ -102,15 +102,24 @@ public final class NookActivityQueue: ObservableObject {
         guard !isSuspended, drainTask == nil, presenter != nil, !pending.isEmpty else { return }
         drainTask = Task { [weak self] in
             await self?.drain()
-            self?.drainTask = nil
+            // Only a drain that finished *naturally* clears the handle. A cancelled
+            // drain was detached by `suspend()`, which already niled the handle — and
+            // a `resume()` may since have installed a fresh drain; don't clobber it.
+            if !Task.isCancelled {
+                self?.drainTask = nil
+            }
         }
     }
 
     private func drain() async {
-        while !isSuspended, !Task.isCancelled, let presenter, let activity = dequeue() {
-            // Don't fight the user for the surface.
+        while !isSuspended, !Task.isCancelled, let presenter, !pending.isEmpty {
+            // Don't fight the user for the surface. Yield *before* claiming an
+            // activity: it stays in `pending` until it is actually about to be
+            // presented, so a `suspend()` or cancellation during the wait leaves it
+            // queued for the next drain rather than stranding it in a discarded task.
             await waitWhileUserEngaged(presenter)
             if isSuspended || Task.isCancelled { break }
+            guard let activity = dequeue() else { break }
 
             await presenter.beginTransientPresentation()
             current = activity
@@ -130,11 +139,26 @@ public final class NookActivityQueue: ObservableObject {
     }
 
     /// Suspends the drain loop while the user is engaging the surface, returning once
-    /// they disengage (or the queue is suspended/cancelled).
+    /// they disengage — or promptly when the queue is suspended or the drain task is
+    /// cancelled.
+    ///
+    /// This polls rather than awaiting `userEngagementChanges` directly. That publisher
+    /// collapses duplicates, so a `for await` over it parks until the *next distinct*
+    /// value arrives — and a `suspend()`/teardown that cancels the drain task while the
+    /// user stays engaged would never wake it. `Task.sleep` throws `CancellationError`
+    /// the instant the task is cancelled, so the wait can never outlive its task.
     private func waitWhileUserEngaged(_ presenter: any NookSurfacePresenting) async {
-        guard presenter.isUserEngaged else { return }
-        for await engaged in presenter.userEngagementChanges.values {
-            if !engaged || isSuspended || Task.isCancelled { return }
+        while presenter.isUserEngaged, !isSuspended {
+            do {
+                try await Task.sleep(for: Self.engagementPollInterval)
+            } catch {
+                return  // drain task cancelled (suspend / teardown)
+            }
         }
     }
+
+    /// How often ``waitWhileUserEngaged(_:)`` re-checks engagement. Short enough that a
+    /// disengaged user sees the next activity without a perceptible gap; only ticks
+    /// while the user is actively engaging the surface.
+    private static let engagementPollInterval: Duration = .milliseconds(200)
 }

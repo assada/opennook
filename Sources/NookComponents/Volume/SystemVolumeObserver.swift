@@ -34,11 +34,28 @@ public final class SystemVolumeObserver: ObservableObject {
     private var muteListener: AudioObjectPropertyListenerBlock?
 
     public init() {
-        observeDefaultDeviceChanges()
-        rebindToDefaultDevice()
+        // All device binding, `refresh()`, and the `@Published` writes it drives must
+        // run on the main thread — the CoreAudio listener blocks are dispatched there,
+        // and SwiftUI requires `objectWillChange` on the main thread. The observer is
+        // routinely constructed from a non-isolated context (an example's top-level
+        // `main.swift`), so bind synchronously when already on main and otherwise hop,
+        // rather than mutating `@Published` state off-main.
+        if Thread.isMainThread {
+            observeDefaultDeviceChanges()
+            rebindToDefaultDevice()
+        } else {
+            queue.async { [weak self] in
+                self?.observeDefaultDeviceChanges()
+                self?.rebindToDefaultDevice()
+            }
+        }
     }
 
     deinit {
+        // `deinit` is non-isolated and may run on any thread. It is sound regardless:
+        // the listener blocks capture `[weak self]`, so once the last reference is
+        // gone no block can still be mutating the device/listener state this reads,
+        // and `AudioObjectRemovePropertyListenerBlock` is itself thread-safe.
         removeDeviceListeners()
         if let listener = defaultDeviceListener {
             var address = Self.address(kAudioHardwarePropertyDefaultOutputDevice)

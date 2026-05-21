@@ -15,6 +15,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     @ObservedObject private var nook: Nook<Expanded, CompactLeading, CompactTrailing>
     @State private var compactLeadingWidth: CGFloat = 0
     @State private var compactTrailingWidth: CGFloat = 0
+    @State private var homeAmbienceColor: Color?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let safeAreaInset: CGFloat = 8
 
@@ -230,6 +231,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: safeAreaInset) }
         .safeAreaInset(edge: .leading, spacing: 0) { Color.clear.frame(width: safeAreaInset) }
         .safeAreaInset(edge: .trailing, spacing: 0) { Color.clear.frame(width: safeAreaInset) }
+        .background {
+            if let homeAmbienceColor {
+                NookHomeAmbienceBackground(color: homeAmbienceColor)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: homeAmbienceColor)
+        .onPreferenceChange(NookHomeAmbiencePreferenceKey.self) { homeAmbienceColor = $0 }
         .frame(minWidth: isFloating ? 0 : nook.notchSize.width)
     }
 }

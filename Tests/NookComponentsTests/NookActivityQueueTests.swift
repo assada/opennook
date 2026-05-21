@@ -101,6 +101,38 @@ final class NookActivityQueueTests: XCTestCase {
         XCTAssertEqual(presenter.beginCount, 1)
     }
 
+    /// Regression: suspending the queue *while the user is engaged* must still let the
+    /// drain task observe its own cancellation. The engagement wait used to park on a
+    /// duplicate-collapsing publisher that never re-emitted, leaking the cancelled task;
+    /// after `resume()` the queue must drive cleanly to completion.
+    @MainActor
+    func testSuspendWhileEngagedThenResumeRecovers() async throws {
+        let queue = instantQueue()
+        let presenter = FakePresenter()
+        presenter.setEngaged(true)
+        queue.bind(to: presenter)
+
+        queue.enqueue(NookActivity(title: "A"))
+        // Let the drain loop reach its engaged-yield point.
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(presenter.beginCount, 0, "must not present while the user is engaged")
+
+        // Suspend mid-yield: the drain task is cancelled and must actually unwind.
+        queue.suspend()
+        XCTAssertNil(queue.drainTask, "suspend clears the drain task")
+
+        // Resume while still engaged, then disengage — the queue must not be wedged.
+        queue.resume()
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(presenter.beginCount, 0, "still yields after resume while engaged")
+
+        presenter.setEngaged(false)
+        await queue.drainTask?.value
+        XCTAssertEqual(presenter.beginCount, 1, "queue recovers and drains after suspend-while-engaged")
+        XCTAssertTrue(queue.pending.isEmpty)
+        XCTAssertNil(queue.current)
+    }
+
     @MainActor
     func testYieldsWhileUserEngaged() async throws {
         let queue = instantQueue()
