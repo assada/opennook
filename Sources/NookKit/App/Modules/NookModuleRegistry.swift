@@ -26,12 +26,17 @@ public final class NookModuleRegistry {
     /// The module shown at launch — the host's explicit choice, else the first registered.
     public let defaultModuleID: String
 
+    /// Optional global shortcut that cycles to the next module. `nil` when the host did
+    /// not configure one.
+    public let cycleHotkey: NookHotkey?
+
     private var instances: [String: NookModule] = [:]
     private var contexts: [String: NookModuleContext] = [:]
 
-    init(registrations: [Registration], defaultModuleID: String) {
+    init(registrations: [Registration], defaultModuleID: String, cycleHotkey: NookHotkey?) {
         self.registrations = registrations
         self.defaultModuleID = defaultModuleID
+        self.cycleHotkey = cycleHotkey
     }
 
     /// All registered modules' descriptors, in registration order — the switcher's list.

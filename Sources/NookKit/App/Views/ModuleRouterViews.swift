@@ -19,26 +19,39 @@ struct ModuleRouterExpandedView: View {
     let toggleKeepOpen: () -> Void
     let hide: () -> Void
     let resetAllSettings: () -> Void
+    let switchModule: (String) -> Void
 
     var body: some View {
         let configuration = moduleHost.configuration
-        NookExpandedView(
-            appState: appState,
-            services: moduleHost.activeServices,
-            toggleKeepOpen: toggleKeepOpen,
-            hide: hide,
-            resetAllSettings: resetAllSettings,
-            theme: configuration.theme,
-            home: configuration.home,
-            topBarLeadingTitle: configuration.topBarLeadingTitle,
-            topBarLeadingIcon: configuration.topBarLeadingIcon,
-            showsTopBar: configuration.showsTopBar,
-            showsSettings: configuration.showsSettings
-        )
-        // Identity tracks the active module so a switch tears down the old content and
-        // inserts the new — letting the transition cross-fade rather than diff in place.
-        .id(moduleHost.activeModuleID)
-        .transition(.opacity)
+        VStack(spacing: 0) {
+            // The switcher is persistent chrome: it sits outside the `.id`-keyed content
+            // below, so it does not cross-fade when the module changes under it.
+            if moduleHost.isMultiModule {
+                ModuleSwitcherBar(moduleHost: moduleHost, switchModule: switchModule)
+            }
+
+            NookExpandedView(
+                appState: appState,
+                services: moduleHost.activeServices,
+                toggleKeepOpen: toggleKeepOpen,
+                hide: hide,
+                resetAllSettings: resetAllSettings,
+                theme: configuration.theme,
+                home: configuration.home,
+                topBarLeadingTitle: configuration.topBarLeadingTitle,
+                topBarLeadingIcon: configuration.topBarLeadingIcon,
+                showsTopBar: configuration.showsTopBar,
+                showsSettings: configuration.showsSettings
+            )
+            // Identity tracks the active module so a switch tears down the old content
+            // and inserts the new — letting the transition cross-fade rather than diff
+            // in place.
+            .id(moduleHost.activeModuleID)
+            .transition(.opacity)
+        }
+        // The switcher reads `\.nookResolvedTheme`; NookExpandedView re-sets it for its
+        // own subtree, so this only reaches the switcher bar.
+        .environment(\.nookResolvedTheme, configuration.theme(appState))
     }
 }
 

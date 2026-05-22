@@ -25,6 +25,10 @@ public struct NookHostConfiguration {
     private var entries: [NookModuleRegistry.Registration] = []
     private var explicitDefault: String?
 
+    /// Optional global shortcut that cycles to the next registered module. `nil` — the
+    /// default — means cycling is reachable only through the switcher.
+    public var moduleCycleHotkey: NookHotkey?
+
     public init() {}
 
     /// Registers a module by descriptor and factory. The factory receives the module's
@@ -66,6 +70,10 @@ public struct NookHostConfiguration {
         let defaultID = explicitDefault.flatMap { registeredIDs.contains($0) ? $0 : nil }
             ?? entries.first?.descriptor.id
             ?? ""
-        return NookModuleRegistry(registrations: entries, defaultModuleID: defaultID)
+        return NookModuleRegistry(
+            registrations: entries,
+            defaultModuleID: defaultID,
+            cycleHotkey: moduleCycleHotkey
+        )
     }
 }

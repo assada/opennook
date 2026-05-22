@@ -93,7 +93,8 @@ public final class AppCoordinator: ObservableObject {
                     appState: self.appState,
                     toggleKeepOpen: { [weak self] in self?.toggleKeepNookOpen() },
                     hide: { [weak self] in self?.hideNook() },
-                    resetAllSettings: { [weak self] in self?.resetAllSettingsToDefaults() }
+                    resetAllSettings: { [weak self] in self?.resetAllSettingsToDefaults() },
+                    switchModule: { [weak self] id in self?.switchModule(to: id) }
                 ))
             },
             compactLeading: {
@@ -162,6 +163,7 @@ public final class AppCoordinator: ObservableObject {
         configureDisplayTargeting()
 
         registerGlobalHotkey()
+        registerModuleHotkeys()
         bindHotkeyRegistration()
         bindNookDragSession()
         bindSurfaceVisibility()
@@ -307,6 +309,9 @@ public final class AppCoordinator: ObservableObject {
 
     // MARK: - Global hotkey
 
+    /// String id of the global show/hide registration in ``HotkeyController``.
+    private static let toggleHotkeyID = "toggle"
+
     /// Registers the current `appState.hotkey` as the global show/hide shortcut.
     /// Skipped while the user is mid-recording so the old shortcut can't fire.
     func registerGlobalHotkey() {
@@ -314,6 +319,7 @@ public final class AppCoordinator: ObservableObject {
 
         let hotkey = appState.hotkey
         let status = hotkeyController.register(
+            Self.toggleHotkeyID,
             keyCode: hotkey.keyCode,
             modifiers: hotkey.carbonModifiers
         ) { [weak self] in
@@ -326,6 +332,33 @@ public final class AppCoordinator: ObservableObject {
         } else {
             // Clear any earlier failure once a registration succeeds.
             appState.errorMessage = nil
+        }
+    }
+
+    /// Registers the static module shortcuts: a direct-jump key per module that declares
+    /// one, and the module-cycle key when the host configured it. These never change
+    /// after launch, unlike the user-rebindable show/hide shortcut.
+    private func registerModuleHotkeys() {
+        for descriptor in moduleHost.descriptors {
+            guard let hotkey = descriptor.hotkey else { continue }
+            let id = descriptor.id
+            hotkeyController.register(
+                "module.\(id)",
+                keyCode: hotkey.keyCode,
+                modifiers: hotkey.carbonModifiers
+            ) { [weak self] in
+                Task { @MainActor in self?.switchModule(to: id) }
+            }
+        }
+
+        if let cycle = moduleHost.cycleHotkey {
+            hotkeyController.register(
+                "cycle",
+                keyCode: cycle.keyCode,
+                modifiers: cycle.carbonModifiers
+            ) { [weak self] in
+                Task { @MainActor in self?.cycleModule() }
+            }
         }
     }
 
@@ -344,7 +377,7 @@ public final class AppCoordinator: ObservableObject {
             .sink { [weak self] isRecording in
                 guard let self else { return }
                 if isRecording {
-                    self.hotkeyController.unregister()
+                    self.hotkeyController.unregister(Self.toggleHotkeyID)
                 } else {
                     self.registerGlobalHotkey()
                 }

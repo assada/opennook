@@ -71,6 +71,26 @@ public final class ModuleHost: ObservableObject {
     /// `true` when more than one module is registered — i.e. a switcher is meaningful.
     public var isMultiModule: Bool { registry.descriptors.count > 1 }
 
+    /// Optional global shortcut that cycles modules, as configured by the host.
+    public var cycleHotkey: NookHotkey? { registry.cycleHotkey }
+
+    /// Modules that want the user's attention while in the background — the switcher
+    /// badges these. A backgrounded module (or a component running on its behalf) calls
+    /// ``requestAttention(for:)``; switching to a module clears its badge.
+    @Published public private(set) var attentionModuleIDs: Set<String> = []
+
+    /// Flags `moduleID` as wanting attention. Ignored for the foreground module — it is
+    /// already on screen, so there is nothing to badge.
+    public func requestAttention(for moduleID: String) {
+        guard moduleID != activeModuleID else { return }
+        attentionModuleIDs.insert(moduleID)
+    }
+
+    /// Clears the attention badge for `moduleID`.
+    public func clearAttention(for moduleID: String) {
+        attentionModuleIDs.remove(moduleID)
+    }
+
     /// Switches the foreground module: deactivates the outgoing module, activates and
     /// re-configures the incoming one, and unloads the outgoing module when its
     /// ``NookModuleDescriptor/backgroundPolicy`` is `.unloadOnSwitchAway`.
@@ -92,6 +112,7 @@ public final class ModuleHost: ObservableObject {
 
         incoming.onActivate()
         activeModuleID = id
+        attentionModuleIDs.remove(id)
         configuration = incoming.makeConfiguration()
 
         if outgoingDescriptor?.backgroundPolicy == .unloadOnSwitchAway {
