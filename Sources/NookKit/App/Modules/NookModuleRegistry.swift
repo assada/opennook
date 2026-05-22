@@ -16,9 +16,15 @@ import Foundation
 /// module whose ``NookModuleDescriptor/backgroundPolicy`` is `.unloadOnSwitchAway`.
 @MainActor
 public final class NookModuleRegistry {
-    struct Registration {
+    /// A registered module: its descriptor plus a lazy factory.
+    ///
+    /// `Sendable` so a ``NookHostConfiguration`` built at the (nonisolated) top level of
+    /// a `main.swift` can be handed to the main actor. The `factory` is `@Sendable`
+    /// because that crossing genuinely happens; it stays `@MainActor` because module
+    /// construction touches main-actor state.
+    struct Registration: Sendable {
         let descriptor: NookModuleDescriptor
-        let factory: @MainActor (NookModuleContext) -> NookModule
+        let factory: @Sendable @MainActor (NookModuleContext) -> NookModule
     }
 
     private let registrations: [Registration]

@@ -53,14 +53,17 @@ public protocol ServiceKey {
 /// let clipboard = services.resolve(ClipboardServiceKey.self)
 /// ```
 ///
-/// Expected to be used from the main actor: registration happens when a module is
-/// constructed, resolution happens during view rendering. It is intentionally not
-/// `@MainActor` so SwiftUI's `EnvironmentKey.defaultValue` initializer stays callable
-/// from any context.
+/// `@MainActor`-isolated: registration happens when a module is constructed and
+/// resolution happens during view rendering — both on the main actor. The mutable
+/// `storage` is therefore only ever touched from one actor, which strict concurrency
+/// can now prove. `init()` is `nonisolated` (it only sets the empty dictionary) so the
+/// `EnvironmentKey.defaultValue` static can still be constructed from any context; a
+/// `@MainActor` class is implicitly `Sendable`, so that static stays concurrency-safe.
+@MainActor
 public final class AppServices {
     private var storage: [ObjectIdentifier: Any] = [:]
 
-    public init() {}
+    public nonisolated init() {}
 
     /// Registers `value` for `key`.
     ///
@@ -92,7 +95,10 @@ public final class AppServices {
 }
 
 private struct AppServicesEnvironmentKey: EnvironmentKey {
-    static let defaultValue: AppServices = AppServices()
+    // A single shared empty container. `AppServices` is a `@MainActor` class — hence
+    // `Sendable` — with a `nonisolated init`, so this static is concurrency-safe and
+    // satisfies `EnvironmentKey.defaultValue` without crossing actors.
+    static let defaultValue = AppServices()
 }
 
 public extension EnvironmentValues {

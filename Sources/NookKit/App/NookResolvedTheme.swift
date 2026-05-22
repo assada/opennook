@@ -119,6 +119,11 @@ public extension NookResolvedTheme {
     ///
     /// Reads the appearance off `NSApplication.shared` rather than the `NSApp` global so
     /// it stays safe before the app has finished launching (and callable from tests).
+    ///
+    /// `@MainActor` because it touches `NSApplication.shared.effectiveAppearance`, which
+    /// is main-actor state. Chrome theming is resolved during view rendering, so the
+    /// isolation matches where it actually runs.
+    @MainActor
     static func live(appState: AppState) -> NookResolvedTheme {
         let systemScheme: ColorScheme =
             NSApplication.shared.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light

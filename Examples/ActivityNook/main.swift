@@ -47,7 +47,9 @@ struct ActivityNookHome: View {
 /// purpose of `prepareForSwitchAway()`.
 @MainActor
 final class ActivityModule: NookModule {
-    static let moduleDescriptor = NookModuleDescriptor(
+    // `nonisolated` so the top-level (nonisolated) host setup can reference it. The
+    // descriptor is an immutable `Sendable` value, so this is safe outside the actor.
+    nonisolated static let moduleDescriptor = NookModuleDescriptor(
         id: "com.opennook.example.activity",
         displayName: "Activity",
         icon: "bell",

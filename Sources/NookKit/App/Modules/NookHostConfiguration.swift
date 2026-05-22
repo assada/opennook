@@ -21,7 +21,11 @@ import Foundation
 /// host.defaultModule = NuggieModule.descriptor.id
 /// NookApp.main(host)
 /// ```
-public struct NookHostConfiguration {
+/// `Sendable`: the registry entries hold only `Sendable` data (descriptors and
+/// `@Sendable` factory closures). A host configuration is assembled at the nonisolated
+/// top level of a `main.swift` and then handed to `NookApp.main`, which runs setup on
+/// the main actor — a real isolation crossing, so the conformance must be genuine.
+public struct NookHostConfiguration: Sendable {
     private var entries: [NookModuleRegistry.Registration] = []
     private var explicitDefault: String?
 
@@ -36,7 +40,7 @@ public struct NookHostConfiguration {
     /// activated, not at registration time.
     public mutating func register(
         _ descriptor: NookModuleDescriptor,
-        factory: @escaping @MainActor (NookModuleContext) -> NookModule
+        factory: @escaping @Sendable @MainActor (NookModuleContext) -> NookModule
     ) {
         entries.append(NookModuleRegistry.Registration(descriptor: descriptor, factory: factory))
     }
@@ -45,7 +49,7 @@ public struct NookHostConfiguration {
     /// state — the configuration is wrapped in a ``ClosureModule``.
     public mutating func register(
         _ descriptor: NookModuleDescriptor,
-        configuration: @escaping @MainActor () -> NookConfiguration
+        configuration: @escaping @Sendable @MainActor () -> NookConfiguration
     ) {
         register(descriptor) { _ in
             ClosureModule(descriptor: descriptor, build: configuration)

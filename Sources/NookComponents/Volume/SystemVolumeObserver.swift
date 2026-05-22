@@ -58,9 +58,19 @@ public final class SystemVolumeObserver: ObservableObject {
     /// The injectable read seam — real CoreAudio in production, a fake in tests.
     private let reader: VolumeReading
 
-    private var defaultDeviceListener: AudioObjectPropertyListenerBlock?
-    private var volumeListener: AudioObjectPropertyListenerBlock?
-    private var muteListener: AudioObjectPropertyListenerBlock?
+    /// CoreAudio listener block type. `AudioObjectPropertyListenerBlock` is imported
+    /// without a `@Sendable` annotation, but a listener block is genuinely sendable: it
+    /// is invoked on an arbitrary CoreAudio queue and the blocks here only capture a
+    /// `[weak self]` to a `@MainActor`-isolated (hence `Sendable`) observer, hopping to
+    /// the main actor before touching any state. Spelling the type `@Sendable` lets the
+    /// non-isolated `deinit` read these to unregister them without a strict-concurrency
+    /// violation.
+    private typealias ListenerBlock =
+        @Sendable (UInt32, UnsafePointer<AudioObjectPropertyAddress>) -> Void
+
+    private var defaultDeviceListener: ListenerBlock?
+    private var volumeListener: ListenerBlock?
+    private var muteListener: ListenerBlock?
 
     /// - Parameter reader: how the observer queries the device, volume, and mute state.
     ///   Defaults to the real CoreAudio implementation; tests inject a fake.
@@ -122,7 +132,7 @@ public final class SystemVolumeObserver: ObservableObject {
         }
         deviceID = device
 
-        let onChange: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        let onChange: ListenerBlock = { [weak self] _, _ in
             // Listener blocks are dispatched on the main *queue*, which is not the main
             // *actor*; hop explicitly before touching `@Published` state.
             Task { @MainActor in self?.refresh() }
@@ -140,7 +150,7 @@ public final class SystemVolumeObserver: ObservableObject {
     }
 
     private func observeDefaultDeviceChanges() {
-        let onChange: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        let onChange: ListenerBlock = { [weak self] _, _ in
             Task { @MainActor in self?.rebindToDefaultDevice() }
         }
         var address = Self.address(kAudioHardwarePropertyDefaultOutputDevice)

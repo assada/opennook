@@ -9,6 +9,10 @@ import SwiftUI
 import XCTest
 @testable import NookKit
 
+// `@MainActor`: the configuration's content and theme closures are main-actor
+// isolated (they build SwiftUI views and resolve the chrome palette), so the tests
+// that invoke them run on the main actor.
+@MainActor
 final class NookConfigurationTests: XCTestCase {
     /// The default configuration must reproduce the demo: every content closure is
     /// populated, the theme provider resolves, and no lifecycle hooks are set.

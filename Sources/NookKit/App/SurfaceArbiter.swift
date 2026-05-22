@@ -47,22 +47,26 @@ final class SurfaceArbiter {
 
     private var nextToken = 0
 
-    private let isUserEngaged: () -> Bool
-    private let activeModuleID: () -> String
-    private let currentState: () -> NookState
-    private let runSerial: (@escaping @MainActor () async -> Void) async -> Void
-    private let expand: () async -> Void
-    private let compact: () async -> Void
-    private let hide: () async -> Void
+    // Every callback is `@MainActor`-isolated: the arbiter is a `@MainActor` type and
+    // its callers (the coordinator) hand it main-actor closures that touch main-actor
+    // state (`surface`, `appState`). Annotating the closure types `@MainActor` keeps
+    // those captures legal under strict concurrency without crossing actor boundaries.
+    private let isUserEngaged: @MainActor () -> Bool
+    private let activeModuleID: @MainActor () -> String
+    private let currentState: @MainActor () -> NookState
+    private let runSerial: @MainActor (@escaping @Sendable @MainActor () async -> Void) async -> Void
+    private let expand: @MainActor () async -> Void
+    private let compact: @MainActor () async -> Void
+    private let hide: @MainActor () async -> Void
 
     init(
-        isUserEngaged: @escaping () -> Bool,
-        activeModuleID: @escaping () -> String,
-        currentState: @escaping () -> NookState,
-        runSerial: @escaping (@escaping @MainActor () async -> Void) async -> Void,
-        expand: @escaping () async -> Void,
-        compact: @escaping () async -> Void,
-        hide: @escaping () async -> Void
+        isUserEngaged: @escaping @MainActor () -> Bool,
+        activeModuleID: @escaping @MainActor () -> String,
+        currentState: @escaping @MainActor () -> NookState,
+        runSerial: @escaping @MainActor (@escaping @Sendable @MainActor () async -> Void) async -> Void,
+        expand: @escaping @MainActor () async -> Void,
+        compact: @escaping @MainActor () async -> Void,
+        hide: @escaping @MainActor () async -> Void
     ) {
         self.isUserEngaged = isUserEngaged
         self.activeModuleID = activeModuleID

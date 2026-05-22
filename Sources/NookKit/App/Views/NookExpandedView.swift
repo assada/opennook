@@ -28,10 +28,11 @@ public struct NookExpandedView: View {
 
     /// Resolves the chrome palette for each layout pass. Host apps override this through
     /// ``NookConfiguration/theme``; the default is ``NookResolvedTheme/live(appState:)``.
-    let theme: (AppState) -> NookResolvedTheme
+    /// `@Sendable @MainActor` to match ``NookConfiguration/theme``.
+    let theme: @Sendable @MainActor (AppState) -> NookResolvedTheme
 
     /// Host-registered home content, shown between the top bar and (when toggled) Settings.
-    let home: () -> AnyView
+    let home: @Sendable @MainActor () -> AnyView
 
     /// Host-configurable top-bar leading label and icon (see `NookConfiguration`).
     let topBarLeadingTitle: (AppState) -> String
@@ -50,8 +51,9 @@ public struct NookExpandedView: View {
         toggleKeepOpen: @escaping () -> Void,
         hide: @escaping () -> Void,
         resetAllSettings: @escaping () -> Void,
-        theme: @escaping (AppState) -> NookResolvedTheme = NookResolvedTheme.live,
-        home: @escaping () -> AnyView = { AnyView(NookPlaceholderHomeView()) },
+        theme: @escaping @Sendable @MainActor (AppState) -> NookResolvedTheme
+            = { NookResolvedTheme.live(appState: $0) },
+        home: @escaping @Sendable @MainActor () -> AnyView = { AnyView(NookPlaceholderHomeView()) },
         topBarLeadingTitle: @escaping (AppState) -> String = { _ in "Home" },
         topBarLeadingIcon: String? = "house",
         showsTopBar: Bool = true,

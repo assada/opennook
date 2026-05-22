@@ -24,11 +24,28 @@ import Foundation
 /// rather than accidental.
 @MainActor
 public final class HotkeyController {
-    public typealias Handler = () -> Void
+    /// A hotkey handler. `@Sendable` because a registration is read from the
+    /// non-isolated `deinit`, and because the Carbon event callback funnels through the
+    /// main actor before invoking it — the closure genuinely crosses no unsynchronized
+    /// state. Callers pass `@MainActor`-isolated closures, which satisfy this.
+    public typealias Handler = @Sendable () -> Void
 
-    private struct Registration {
+    /// An opaque Carbon hotkey/event-handler reference, wrapped so it can be read from
+    /// the non-isolated `deinit`.
+    ///
+    /// `EventHotKeyRef`/`EventHandlerRef` import as `OpaquePointer`, which is not
+    /// `Sendable`. The wrapper is `@unchecked Sendable` because that is genuinely
+    /// correct here: the pointer is an immutable C handle, set once at registration and
+    /// never mutated, and its only cross-actor use is the thread-agnostic Carbon
+    /// `Unregister*`/`RemoveEventHandler` teardown calls in `deinit`. There is no shared
+    /// mutable state to race.
+    struct CarbonRef: @unchecked Sendable {
+        let pointer: OpaquePointer
+    }
+
+    private struct Registration: Sendable {
         let carbonID: UInt32
-        let ref: EventHotKeyRef?
+        let ref: CarbonRef?
         let handler: Handler
     }
 
@@ -38,7 +55,7 @@ public final class HotkeyController {
     /// Handlers keyed by Carbon hotkey id — the dispatch table the event callback uses.
     private var handlersByCarbonID: [UInt32: Handler] = [:]
 
-    private var eventHandler: EventHandlerRef?
+    private var eventHandler: CarbonRef?
 
     /// Monotonic Carbon hotkey id source. Ids are never recycled: `unregister` removes
     /// the dispatch-table entry, so a stale id can never collide with a live handler,
@@ -59,11 +76,11 @@ public final class HotkeyController {
         // Unregister/RemoveEventHandler are thread-agnostic C calls.
         for registration in registrations.values {
             if let ref = registration.ref {
-                UnregisterEventHotKey(ref)
+                UnregisterEventHotKey(ref.pointer)
             }
         }
         if let eventHandler {
-            RemoveEventHandler(eventHandler)
+            RemoveEventHandler(eventHandler.pointer)
         }
     }
 
@@ -97,7 +114,11 @@ public final class HotkeyController {
         )
         guard status == noErr else { return status }
 
-        registrations[id] = Registration(carbonID: carbonID, ref: ref, handler: handler)
+        registrations[id] = Registration(
+            carbonID: carbonID,
+            ref: ref.map(CarbonRef.init(pointer:)),
+            handler: handler
+        )
         handlersByCarbonID[carbonID] = handler
         return noErr
     }
@@ -106,7 +127,7 @@ public final class HotkeyController {
     public func unregister(_ id: String) {
         guard let registration = registrations.removeValue(forKey: id) else { return }
         if let ref = registration.ref {
-            UnregisterEventHotKey(ref)
+            UnregisterEventHotKey(ref.pointer)
         }
         handlersByCarbonID.removeValue(forKey: registration.carbonID)
     }
@@ -117,7 +138,7 @@ public final class HotkeyController {
             unregister(id)
         }
         if let eventHandler {
-            RemoveEventHandler(eventHandler)
+            RemoveEventHandler(eventHandler.pointer)
             self.eventHandler = nil
         }
     }
@@ -136,7 +157,8 @@ public final class HotkeyController {
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
-        return InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
+        var installedHandler: EventHandlerRef?
+        let status = InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
             guard let userData, let event else { return noErr }
 
             var hotKeyID = EventHotKeyID()
@@ -162,7 +184,11 @@ public final class HotkeyController {
                 DispatchQueue.main.async { controller.dispatchHandler(forCarbonID: carbonID) }
             }
             return noErr
-        }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+        }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &installedHandler)
+        if status == noErr {
+            eventHandler = installedHandler.map(CarbonRef.init(pointer:))
+        }
+        return status
     }
 
     /// Looks up and invokes the handler for a pressed hotkey. Main-actor isolated, so the

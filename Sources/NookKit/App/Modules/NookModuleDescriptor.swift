@@ -14,7 +14,11 @@ import SwiftUI
 /// metadata to list it, key its persistence, and route a hotkey to it. The split keeps
 /// registration free of side effects: a host can register a dozen modules and pay the
 /// construction cost only for the ones the user actually opens.
-public struct NookModuleDescriptor: Identifiable {
+/// `Sendable`: a descriptor is a value type of `Sendable` members (`String`, SwiftUI
+/// `Color`, `NookHotkey`, the `BackgroundPolicy` enum). It is built at launch and
+/// handed to the main actor as part of a ``NookHostConfiguration``, so it genuinely
+/// crosses an isolation boundary and the conformance must be real.
+public struct NookModuleDescriptor: Identifiable, Sendable {
     /// Stable, unique identifier — reverse-DNS by convention (`"com.you.nuggie"`).
     /// Used as the switcher key, the per-module `UserDefaults` suite name, and the
     /// on-disk container folder name, so it must not change across releases.
@@ -37,7 +41,7 @@ public struct NookModuleDescriptor: Identifiable {
     public var backgroundPolicy: BackgroundPolicy
 
     /// Residency policy for a module that is not the foreground module.
-    public enum BackgroundPolicy {
+    public enum BackgroundPolicy: Sendable {
         /// Tear the module down on switch-away; rebuild it on next activation. Cheapest;
         /// the module does no background work and posts no background activities.
         case unloadOnSwitchAway

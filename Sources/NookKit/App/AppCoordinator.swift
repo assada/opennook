@@ -32,7 +32,18 @@ public final class AppCoordinator: ObservableObject {
 
     let hotkeyController: HotkeyController
     var cancellables = Set<AnyCancellable>()
-    var accessibilityObserver: NSObjectProtocol?
+
+    /// An opaque `NotificationCenter` observer token, wrapped so the non-isolated
+    /// `deinit` can read it to unregister.
+    ///
+    /// The token imports as a non-`Sendable` `NSObjectProtocol`. The wrapper is
+    /// `@unchecked Sendable` because that is genuinely correct: the token is an opaque,
+    /// immutable handle and its only use is `NotificationCenter.removeObserver`, which
+    /// Apple documents as thread-safe. There is no mutable state to race.
+    struct ObserverToken: @unchecked Sendable {
+        let token: NSObjectProtocol
+    }
+    var accessibilityObserver: ObserverToken?
 
     /// Arbitrates the surface between competing transient presenters — the activity
     /// queues and ambient indicators of every loaded module. Lazy because it captures
@@ -76,7 +87,7 @@ public final class AppCoordinator: ObservableObject {
     /// Chains `operation` after every previously enqueued lifecycle transition so
     /// they run strictly in order. The returned task completes when `operation` does.
     @discardableResult
-    func enqueueLifecycle(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+    func enqueueLifecycle(_ operation: @escaping @Sendable @MainActor () async -> Void) -> Task<Void, Never> {
         let previous = lifecycleTail
         let task = Task { @MainActor in
             await previous?.value
@@ -199,7 +210,7 @@ public final class AppCoordinator: ObservableObject {
 
     deinit {
         if let accessibilityObserver {
-            NotificationCenter.default.removeObserver(accessibilityObserver)
+            NotificationCenter.default.removeObserver(accessibilityObserver.token)
         }
     }
 
@@ -493,15 +504,17 @@ public final class AppCoordinator: ObservableObject {
             .sink { [weak self] _ in self?.syncNotchBackdrop() }
             .store(in: &cancellables)
 
-        accessibilityObserver = NotificationCenter.default.addObserver(
-            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.syncNotchBackdrop()
+        accessibilityObserver = ObserverToken(
+            token: NotificationCenter.default.addObserver(
+                forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncNotchBackdrop()
+                }
             }
-        }
+        )
     }
 
     private func currentResolvedSystemScheme() -> ColorScheme {

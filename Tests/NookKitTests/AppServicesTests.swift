@@ -8,6 +8,10 @@
 import XCTest
 @testable import NookKit
 
+// `@MainActor` because `AppServices` is a main-actor-isolated DI container; its
+// `register`/`resolve`/subscript are exercised here, so the test methods run on the
+// main actor too.
+@MainActor
 final class AppServicesTests: XCTestCase {
     private final class Clipboard {
         var contents: String

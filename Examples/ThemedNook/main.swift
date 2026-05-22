@@ -18,6 +18,7 @@ import SwiftUI
 /// the framework recommends explicit values (not system-adaptive ones) — see the
 /// `NookResolvedTheme` type docs for why.
 enum SunsetTheme {
+    @MainActor
     static func resolve(_ appState: AppState) -> NookResolvedTheme {
         NookResolvedTheme(
             primaryLabel: Color(red: 1.0, green: 0.93, blue: 0.86),
@@ -53,7 +54,7 @@ struct ThemedHomeView: View {
 
 var configuration = NookConfiguration()
 configuration.setHome { ThemedHomeView() }
-configuration.theme = SunsetTheme.resolve
+configuration.theme = { SunsetTheme.resolve($0) }
 configuration.onExpand = { print("[ThemedNook] nook expanded") }
 configuration.onCompact = { print("[ThemedNook] nook compacted") }
 NookApp.main(configuration)

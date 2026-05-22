@@ -35,12 +35,18 @@ let package = Package(
     targets: [
         .target(
             name: "NookSurface",
-            path: "Sources/NookSurface"
+            path: "Sources/NookSurface",
+            // Strict-concurrency checking is opted in via an upcoming feature so the
+            // `@MainActor`/`Sendable` correctness is compiler-enforced. Kept as an
+            // upcoming feature (not a tools-version bump to 6.0) so this stays a
+            // non-breaking change for consumers — deliberate architecture decision.
+            swiftSettings: [.enableUpcomingFeature("StrictConcurrency")]
         ),
         .target(
             name: "NookKit",
             dependencies: ["NookSurface"],
-            path: "Sources/NookKit"
+            path: "Sources/NookKit",
+            swiftSettings: [.enableUpcomingFeature("StrictConcurrency")]
         ),
         .target(
             // Library, not executable, so both the SPM trampoline and the Xcode app
@@ -48,7 +54,8 @@ let package = Package(
             // `NookApp.swift`; entry points call `NookApp.main()` explicitly.
             name: "NookApp",
             dependencies: ["NookKit"],
-            path: "Sources/NookApp"
+            path: "Sources/NookApp",
+            swiftSettings: [.enableUpcomingFeature("StrictConcurrency")]
         ),
         .executableTarget(
             // SPM trampoline. Three-line `main.swift` that imports `NookApp` and calls
@@ -64,7 +71,8 @@ let package = Package(
             // (for the resolved-theme environment); not part of the default app.
             name: "NookComponents",
             dependencies: ["NookKit"],
-            path: "Sources/NookComponents"
+            path: "Sources/NookComponents",
+            swiftSettings: [.enableUpcomingFeature("StrictConcurrency")]
         ),
         .executableTarget(
             name: "HelloNook",

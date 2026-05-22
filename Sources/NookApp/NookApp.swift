@@ -55,7 +55,9 @@ public enum NookApp {
     /// ```swift
     /// NookApp.main { MyHomeView() }
     /// ```
-    public static func main<Home: View>(@ViewBuilder home: @escaping () -> Home) {
+    public static func main<Home: View & Sendable>(
+        @ViewBuilder home: @escaping @Sendable @MainActor () -> Home
+    ) {
         var configuration = NookConfiguration()
         configuration.setHome(home)
         main(configuration)
@@ -76,7 +78,7 @@ public enum NookApp {
     ///     return configuration
     /// }
     /// ```
-    public static func main(_ build: @MainActor () -> NookConfiguration) {
+    public static func main(_ build: @escaping @Sendable @MainActor () -> NookConfiguration) {
         MainActor.assumeIsolated {
             main(build())
         }

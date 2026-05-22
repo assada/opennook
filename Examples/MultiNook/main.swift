@@ -73,7 +73,9 @@ struct LaunchTrackerKey: ServiceKey {
 /// protocol; the simpler modules below register a `NookConfiguration` closure directly.
 @MainActor
 final class CounterModule: NookModule {
-    static let moduleDescriptor = NookModuleDescriptor(
+    // `nonisolated` so the top-level (nonisolated) host setup can reference it. The
+    // descriptor is an immutable `Sendable` value, so this is safe outside the actor.
+    nonisolated static let moduleDescriptor = NookModuleDescriptor(
         id: "com.opennook.example.counter",
         displayName: "Counter",
         icon: "number",
@@ -116,6 +118,7 @@ struct CounterHome: View {
     }
 }
 
+@MainActor
 func clockConfiguration() -> NookConfiguration {
     var configuration = NookConfiguration()
     configuration.setHome {
@@ -130,6 +133,7 @@ func clockConfiguration() -> NookConfiguration {
     return configuration
 }
 
+@MainActor
 func notesConfiguration() -> NookConfiguration {
     var configuration = NookConfiguration()
     configuration.setHome {
@@ -156,7 +160,7 @@ host.register(
         icon: "clock",
         accent: .blue
     ),
-    configuration: clockConfiguration
+    configuration: { clockConfiguration() }
 )
 host.register(
     NookModuleDescriptor(
@@ -165,7 +169,7 @@ host.register(
         icon: "note.text",
         accent: .green
     ),
-    configuration: notesConfiguration
+    configuration: { notesConfiguration() }
 )
 
 // Control-Option-Grave cycles to the next module. (Carbon: controlKey | optionKey.)
