@@ -8,6 +8,7 @@
 import XCTest
 @testable import NookComponents
 
+@MainActor
 final class ShelfStoreTests: XCTestCase {
     /// Writes a throwaway file into the temp directory and returns its URL.
     private func makeTempFile() throws -> URL {
@@ -115,5 +116,45 @@ final class ShelfStoreTests: XCTestCase {
         try FileManager.default.removeItem(at: second)
         store.purgeMissing()
         XCTAssertEqual(store.items.count, 2, "a total resolution failure must not wipe the shelf")
+    }
+
+    /// The consolidated `init` reconcile (load + heal + purge in one pass) must purge an
+    /// individually-deleted file on launch, exactly as `purgeMissing()` does — proving
+    /// the single-pass consolidation preserves the per-item purge behaviour.
+    func testInitReconcilePurgesIndividualDeletedFile() throws {
+        let defaults = UserDefaults(suiteName: "nook.test.\(UUID().uuidString)")!
+        let key = "items"
+        let kept = try makeTempFile()
+        let deleted = try makeTempFile()
+        defer { try? FileManager.default.removeItem(at: kept) }
+
+        let first = ShelfStore(persistenceKey: key, defaults: defaults)
+        first.accept([kept, deleted])
+        XCTAssertEqual(first.items.count, 2)
+
+        // Delete one file, then construct a fresh store: its init reconcile sees a
+        // surviving sibling, so the genuinely-missing file is dropped on load.
+        try FileManager.default.removeItem(at: deleted)
+        let reloaded = ShelfStore(persistenceKey: key, defaults: defaults)
+        XCTAssertEqual(reloaded.items.count, 1)
+        XCTAssertEqual(reloaded.items.first?.resolveURL()?.standardizedFileURL, kept.standardizedFileURL)
+    }
+
+    /// The consolidated `init` reconcile must also honour the systemic-failure rule:
+    /// when *every* persisted item fails to resolve on launch, the shelf is preserved.
+    func testInitReconcilePreservesShelfOnSystemicFailure() throws {
+        let defaults = UserDefaults(suiteName: "nook.test.\(UUID().uuidString)")!
+        let key = "items"
+        let first = try makeTempFile()
+        let second = try makeTempFile()
+
+        let store = ShelfStore(persistenceKey: key, defaults: defaults)
+        store.accept([first, second])
+        XCTAssertEqual(store.items.count, 2)
+
+        try FileManager.default.removeItem(at: first)
+        try FileManager.default.removeItem(at: second)
+        let reloaded = ShelfStore(persistenceKey: key, defaults: defaults)
+        XCTAssertEqual(reloaded.items.count, 2, "a total resolution failure on init must not wipe the shelf")
     }
 }

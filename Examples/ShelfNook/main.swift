@@ -15,11 +15,20 @@ import NookApp
 import NookComponents
 import SwiftUI
 
-// One shelf model, shared between the home view that renders it and the drop
-// handler that fills it.
-let shelf = ShelfStore()
+// `NookApp.main { … }` builds the configuration on the main actor, so the
+// main-actor-isolated ShelfStore can be constructed here.
+NookApp.main {
+    // One shelf model, shared between the home view that renders it and the drop
+    // handler that fills it.
+    let shelf = ShelfStore()
 
-var configuration = NookConfiguration()
-configuration.setHome { NookShelfView(store: shelf) }
-configuration.onFileDrop = { urls in shelf.accept(urls) }
-NookApp.main(configuration)
+    var configuration = NookConfiguration()
+    configuration.setHome { NookShelfView(store: shelf) }
+    configuration.onFileDrop = { urls in
+        // `onFileDrop` is delivered by the main-actor `Nook` surface, so it always
+        // arrives on the main actor; assume that isolation to reach the main-actor
+        // `ShelfStore.accept`.
+        MainActor.assumeIsolated { shelf.accept(urls) }
+    }
+    return configuration
+}

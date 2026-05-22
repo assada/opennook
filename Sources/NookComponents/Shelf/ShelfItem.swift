@@ -99,12 +99,11 @@ public struct ShelfItem: Identifiable, Codable, Hashable, Sendable {
         return nil
     }
 
-    /// Returns a copy whose bookmark has been re-captured from its current location, or
-    /// `nil` if it can't currently be resolved. Used to heal a stale bookmark.
-    func refreshedBookmark() -> ShelfItem? {
-        guard let url = resolveURL(), let fresh = Self.bookmarkData(for: url) else {
-            return nil
-        }
+    /// Returns a copy whose bookmark has been re-captured from `url`, or `nil` if a fresh
+    /// bookmark can't be made. The caller supplies the already-resolved URL so a heal
+    /// pass doesn't resolve the bookmark a second time — see ``ShelfStore``.
+    func reBookmarked(from url: URL) -> ShelfItem? {
+        guard let fresh = Self.bookmarkData(for: url) else { return nil }
         return ShelfItem(
             id: id,
             displayName: displayName,

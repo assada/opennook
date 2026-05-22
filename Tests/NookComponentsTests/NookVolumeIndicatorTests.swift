@@ -21,8 +21,10 @@ final class NookVolumeIndicatorTests: XCTestCase {
         XCTAssertEqual(NookVolumeIndicator.symbolName(volume: 0.0, isMuted: true), "speaker.slash.fill")
     }
 
-    /// Smoke test: constructing the observer must not crash, and the reported volume
-    /// stays within `0...1` whether or not a real output device is present.
+    /// Smoke test: constructing the observer with the real CoreAudio reader must not
+    /// crash, and the reported volume stays within `0...1` whether or not a real output
+    /// device is present.
+    @MainActor
     func testObserverReportsVolumeInRange() {
         let observer = SystemVolumeObserver()
         XCTAssertGreaterThanOrEqual(observer.volume, 0)

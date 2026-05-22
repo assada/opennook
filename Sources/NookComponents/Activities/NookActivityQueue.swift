@@ -146,8 +146,17 @@ public final class NookActivityQueue: ObservableObject {
             }
             current = activity
             await sleep(activity.dwell)
-            // Collapse the surface *before* clearing `current`, so the host renders the
-            // activity card through the collapse rather than flashing idle home content.
+            // Keep `current` set across the `endTransientPresentation` await, then clear
+            // it — this holds the activity card on screen while the surface hands the
+            // claim back.
+            //
+            // Honest caveat: `endTransientPresentation` returns when the claim is
+            // released, not necessarily when a follow-on collapse *animation* has
+            // finished. If the presenter animates the collapse asynchronously after
+            // returning, `current` is already `nil` for the tail of that animation and
+            // the host shows idle home content underneath. That is acceptable — the card
+            // covers the claim handoff, which is the visible part — but it is not the
+            // "card renders through the entire collapse" an earlier comment promised.
             await presenter.endTransientPresentation(token)
             current = nil
         }

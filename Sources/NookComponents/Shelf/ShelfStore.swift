@@ -14,8 +14,11 @@ import Foundation
 /// `UserDefaults` (as encoded ``ShelfItem`` bookmarks) and reloads on the next launch,
 /// dropping any items whose files have since disappeared.
 ///
-/// Like most `ObservableObject` view models it is intended for main-thread use — file
-/// drops and SwiftUI interactions both arrive there.
+/// `@MainActor`-isolated: the `@Published` `items` drives SwiftUI, and every mutation
+/// path arrives on the main actor — file drops are delivered by the (main-actor) `Nook`
+/// surface, and SwiftUI interactions are main-actor by definition. This matches the
+/// concurrency contract of `NookActivityQueue`.
+@MainActor
 public final class ShelfStore: ObservableObject {
     /// Shelved files, oldest first.
     @Published public private(set) var items: [ShelfItem] = []
@@ -29,9 +32,7 @@ public final class ShelfStore: ObservableObject {
     public init(persistenceKey: String = "nook.shelf.items", defaults: UserDefaults = .standard) {
         self.persistenceKey = persistenceKey
         self.defaults = defaults
-        load()
-        healStaleBookmarks()
-        purgeMissing()
+        loadAndReconcile()
     }
 
     /// Adds files to the shelf, skipping any already present (compared by resolved path).
@@ -39,6 +40,11 @@ public final class ShelfStore: ObservableObject {
     /// was added, which keeps the nook expanded so the shelf is visible.
     @discardableResult
     public func accept(_ urls: [URL]) -> Bool {
+        // Dedup is a *path-level* comparison, so `resolveURL()` (no security scope) is
+        // the right call here — and is deliberately not wrapped in `withResolvedURL`.
+        // Per `ShelfItem`'s contract, security-scoped access is only needed to touch a
+        // file's *contents*; resolving a bookmark to a URL for comparison does not need
+        // it. Bracketing here would start/stop scoped access for no read — pure overhead.
         let existing = Set(items.compactMap { $0.resolveURL()?.standardizedFileURL.path })
         let added = urls
             .filter { !existing.contains($0.standardizedFileURL.path) }
@@ -65,8 +71,8 @@ public final class ShelfStore: ObservableObject {
         persist()
     }
 
-    /// Drops items whose file is genuinely gone. Called once on `init`; a host can call
-    /// it again (e.g. when the shelf surface appears).
+    /// Drops items whose file is genuinely gone. Called via ``loadAndReconcile()`` on
+    /// `init`; a host can call this again (e.g. when the shelf surface appears).
     ///
     /// A resolution failure is **ambiguous** — under the App Sandbox a lost grant looks
     /// identical to a deleted file. So purging is conservative: if *every* item fails to
@@ -84,20 +90,47 @@ public final class ShelfStore: ObservableObject {
         if items.count != before { persist() }
     }
 
-    /// Re-captures any bookmark that resolved but reported itself stale (file moved
-    /// across volumes, OS bookmark-format migration). Apple's contract is to re-bookmark
-    /// from the resolved URL; left unhealed, a stale bookmark eventually stops resolving.
-    private func healStaleBookmarks() {
-        var changed = false
-        items = items.map { item in
-            guard let resolution = item.resolved(), resolution.isStale,
-                  let refreshed = item.refreshedBookmark() else {
-                return item
-            }
-            changed = true
-            return refreshed
+    /// Loads the persisted shelf and reconciles it in a **single pass** over every item,
+    /// resolving each bookmark exactly once. For each item that pass does two things:
+    ///
+    /// - **Heal:** a bookmark that resolves but reports itself stale (file moved across
+    ///   volumes, OS bookmark-format migration) is re-captured from the resolved URL.
+    ///   Apple's contract is to re-bookmark from there; left unhealed it eventually
+    ///   stops resolving.
+    /// - **Purge:** an item whose bookmark fails to resolve is a *candidate* for removal,
+    ///   but only when at least one sibling still resolves. A total resolution failure is
+    ///   indistinguishable from a sandboxed host losing its access grant, so in that case
+    ///   nothing is dropped — the same conservative rule as ``purgeMissing()``.
+    ///
+    /// This is the consolidation of what used to be three separate full passes
+    /// (`load` + `healStaleBookmarks` + `purgeMissing`) and is behaviour-preserving.
+    private func loadAndReconcile() {
+        guard let data = defaults.data(forKey: persistenceKey),
+              let decoded = try? JSONDecoder().decode([ShelfItem].self, from: data) else {
+            return
         }
-        if changed { persist() }
+
+        // One resolution per item, reused for both the heal and the purge decision.
+        let reconciled: [(item: ShelfItem, resolved: Bool, healed: Bool)] = decoded.map { item in
+            guard let resolution = item.resolved() else {
+                return (item, false, false)
+            }
+            if resolution.isStale, let fresh = item.reBookmarked(from: resolution.url) {
+                return (fresh, true, true)
+            }
+            return (item, true, false)
+        }
+
+        // Purge individual misses only when access is clearly working (a sibling
+        // resolved); a systemic failure preserves the whole shelf.
+        let anyResolved = reconciled.contains { $0.resolved }
+        let kept = reconciled.filter { anyResolved ? $0.resolved : true }
+
+        items = kept.map(\.item)
+
+        let droppedAny = kept.count != decoded.count
+        let healedAny = kept.contains { $0.healed }
+        if droppedAny || healedAny { persist() }
     }
 
     // MARK: - Persistence
@@ -105,13 +138,5 @@ public final class ShelfStore: ObservableObject {
     private func persist() {
         guard let data = try? JSONEncoder().encode(items) else { return }
         defaults.set(data, forKey: persistenceKey)
-    }
-
-    private func load() {
-        guard let data = defaults.data(forKey: persistenceKey),
-              let decoded = try? JSONDecoder().decode([ShelfItem].self, from: data) else {
-            return
-        }
-        items = decoded
     }
 }

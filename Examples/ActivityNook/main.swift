@@ -58,6 +58,10 @@ NookApp.main {
             NookActivity(priority: .low, title: "New message",
                          subtitle: "from the notch", systemImage: "message", tint: .orange),
         ]
+        // Intentionally never invalidated: this is a demo, so the timer's lifetime is
+        // the app's lifetime — it stops only when the process exits. A real app that
+        // creates a repeating timer with a shorter scope must keep a reference and call
+        // `invalidate()`; don't cargo-cult this unowned timer.
         Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { _ in
             // Timer fires on the main run loop; hop to the main actor to enqueue.
             MainActor.assumeIsolated {

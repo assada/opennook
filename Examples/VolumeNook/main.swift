@@ -17,9 +17,13 @@ import NookApp
 import NookComponents
 import SwiftUI
 
-// One observer, rendered in the compact-trailing slot.
-let volume = SystemVolumeObserver()
+// `NookApp.main { … }` builds the configuration on the main actor, so the
+// main-actor-isolated SystemVolumeObserver can be constructed here.
+NookApp.main {
+    // One observer, rendered in the compact-trailing slot.
+    let volume = SystemVolumeObserver()
 
-var configuration = NookConfiguration()
-configuration.setCompactTrailing { NookVolumeIndicator(observer: volume) }
-NookApp.main(configuration)
+    var configuration = NookConfiguration()
+    configuration.setCompactTrailing { NookVolumeIndicator(observer: volume) }
+    return configuration
+}
