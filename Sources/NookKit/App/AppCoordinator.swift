@@ -66,6 +66,33 @@ public final class AppCoordinator: ObservableObject {
     /// duplicate observers, sinks, and `onReady` callbacks.
     private var hasStarted = false
 
+    /// User-initiated open intent — `true` from the moment the user opens the surface
+    /// (toggleNook / showNook / showHome / showSettings) until it leaves `.expanded`
+    /// for any reason. Drives ``isUserEngaged`` together with `surface.isHovering`.
+    ///
+    /// This is *intent*, not a mirror of surface state. The arbiter's own `expand()`
+    /// flips the surface to `.expanded` but does NOT set this flag — so a later
+    /// higher-priority claim can preempt without the gate falsely tripping. The old
+    /// model (engagement = `isNookVisible || isHovering`) had exactly that bug,
+    /// because the mirror flipped from the arbiter's own expand and silently
+    /// disabled all subsequent preemption.
+    ///
+    /// Read/written via ``setUserInitiatedOpen(_:)`` so changes publish through
+    /// ``userInitiatedOpenSubject`` for ``userEngagementChanges``.
+    private var userInitiatedOpen: Bool = false
+
+    /// Backing publisher for ``userInitiatedOpen``; combined with the surface's hover
+    /// publisher to drive ``userEngagementChanges``.
+    private let userInitiatedOpenSubject = CurrentValueSubject<Bool, Never>(false)
+
+    /// Single setter for ``userInitiatedOpen`` that publishes through
+    /// ``userInitiatedOpenSubject``. Idempotent: a no-op when the value is unchanged.
+    private func setUserInitiatedOpen(_ value: Bool) {
+        guard userInitiatedOpen != value else { return }
+        userInitiatedOpen = value
+        userInitiatedOpenSubject.send(value)
+    }
+
     /// Module ids whose `onReady` has already fired. A module's `onReady` runs once per
     /// *loaded instance* — when it is unloaded (`unloadOnSwitchAway`) the id is dropped
     /// so a rebuilt instance gets a fresh `onReady` (e.g. to re-bind an activity queue).
@@ -199,6 +226,12 @@ public final class AppCoordinator: ObservableObject {
         )
 
         bindBackdropSynchronization()
+        // Bind the surface-state mirror at init, not at start: it is pure observation
+        // (writes only to `appState.isNookVisible` and clears `userInitiatedOpen` on
+        // independent collapse), and the arbiter's engagement bookkeeping depends on
+        // it being live from the moment the coordinator exists — including in tests
+        // that construct a coordinator without calling `start()`.
+        bindSurfaceVisibility()
 
         coordinatorBox.coordinator = self
         // Project the active module's lifecycle callbacks onto the surface. The hooks
@@ -228,7 +261,8 @@ public final class AppCoordinator: ObservableObject {
         registerModuleHotkeys()
         bindHotkeyRegistration()
         bindNookDragSession()
-        bindSurfaceVisibility()
+        // `bindSurfaceVisibility` was moved to `init` — it must be live before any
+        // arbiter claim is granted, including in tests that don't call `start()`.
 
         // Cold-launch greeting: compact the chrome, then fire a one-shot shimmer along the
         // perimeter so the user sees the app is awake. Awaiting `compact()` first puts the
@@ -542,16 +576,25 @@ public final class AppCoordinator: ObservableObject {
         )
     }
 
-    /// Mirrors the surface's live ``NookState`` onto `appState.isNookVisible`. This is the
-    /// single source of truth for "is the nook expanded" — it catches hover- and
-    /// drag-driven transitions, which coordinator-initiated show/hide cannot.
+    /// Mirrors the surface's live ``NookState`` onto `appState.isNookVisible`, and bounds
+    /// ``userInitiatedOpen`` by it: any independent collapse — hover-exit auto-compact,
+    /// drag dismiss, arbiter restore — cleanly clears intent without explicit teardown.
+    ///
+    /// This single sink is the only writer of `appState.isNookVisible` and the only
+    /// path that clears `userInitiatedOpen` on independent collapse; the user-action
+    /// entry points (``hideNook``, the compact branch of ``toggleNook``) clear intent
+    /// synchronously *before* compact runs, then this sink confirms it.
     private func bindSurfaceVisibility() {
         surface.statePublisher
             .map { $0 == .expanded }
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] expanded in
-                self?.appState.isNookVisible = expanded
+                guard let self else { return }
+                self.appState.isNookVisible = expanded
+                if !expanded {
+                    self.setUserInitiatedOpen(false)
+                }
             }
             .store(in: &cancellables)
     }
@@ -578,8 +621,10 @@ public final class AppCoordinator: ObservableObject {
             // toggle closed even though no coordinator call opened it, and deciding
             // before the serial chain reaches us would race other queued transitions.
             if self.surface.state == .expanded {
+                self.setUserInitiatedOpen(false)
                 await self.surface.compact(on: nil)
             } else {
+                self.setUserInitiatedOpen(true)
                 self.surface.staysExpandedOnHoverExit = self.appState.keepNookOpen
                 await self.surface.expand(on: nil)
             }
@@ -590,6 +635,7 @@ public final class AppCoordinator: ObservableObject {
         appState.resetTransientStatus()
         enqueueLifecycle { [weak self] in
             guard let self else { return }
+            self.setUserInitiatedOpen(true)
             self.surface.staysExpandedOnHoverExit = self.appState.keepNookOpen
             await self.surface.expand(on: nil)
         }
@@ -614,7 +660,9 @@ public final class AppCoordinator: ObservableObject {
 
     public func hideNook() {
         enqueueLifecycle { [weak self] in
-            await self?.surface.compact(on: nil)
+            guard let self else { return }
+            self.setUserInitiatedOpen(false)
+            await self.surface.compact(on: nil)
         }
     }
 
@@ -660,12 +708,16 @@ public final class AppCoordinator: ObservableObject {
 extension AppCoordinator: NookSurfacePresenting {
     /// The user owns the surface while they're hovering it or while they opened it
     /// themselves; a transient presenter pauses in either case.
+    ///
+    /// Sources from ``userInitiatedOpen`` (user intent) — NOT `appState.isNookVisible`
+    /// (surface mirror) — so the arbiter's own `expand()` never trips this gate on a
+    /// subsequent preempting claim.
     public var isUserEngaged: Bool {
-        appState.isNookVisible || surface.isHovering
+        userInitiatedOpen || surface.isHovering
     }
 
     public var userEngagementChanges: AnyPublisher<Bool, Never> {
-        appState.$isNookVisible
+        userInitiatedOpenSubject
             .combineLatest(surface.isHoveringPublisher)
             .map { $0 || $1 }
             .removeDuplicates()
