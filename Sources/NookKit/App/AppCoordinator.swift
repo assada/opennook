@@ -400,12 +400,14 @@ public final class AppCoordinator: ObservableObject {
                 self?.toggleNook()
             }
         }
-        if status != noErr {
-            appState.errorMessage = "That shortcut is unavailable — another app may be using it."
-        } else {
-            // Clear any earlier failure once a registration succeeds.
-            appState.errorMessage = nil
-        }
+        // Record the CURRENT outcome on the durable failure channel: a failure stays
+        // visible until a later attempt succeeds; a success clears this id's entry.
+        recordHotkeyOutcome(
+            id: Self.toggleHotkeyID,
+            status: status,
+            shortcutName: "Show Nook",
+            hotkey: hotkey
+        )
     }
 
     /// Registers the static module shortcuts: a direct-jump key per module that declares
@@ -415,24 +417,51 @@ public final class AppCoordinator: ObservableObject {
         for descriptor in moduleHost.descriptors {
             guard let hotkey = descriptor.hotkey else { continue }
             let id = descriptor.id
-            hotkeyController.register(
+            let status = hotkeyController.register(
                 "module.\(id)",
                 keyCode: hotkey.keyCode,
                 modifiers: hotkey.carbonModifiers
             ) { [weak self] in
                 Task { @MainActor in self?.switchModule(to: id) }
             }
+            recordHotkeyOutcome(
+                id: "module.\(id)",
+                status: status,
+                shortcutName: descriptor.displayName,
+                hotkey: hotkey
+            )
         }
 
         if let cycle = moduleHost.cycleHotkey {
-            hotkeyController.register(
+            let status = hotkeyController.register(
                 "cycle",
                 keyCode: cycle.keyCode,
                 modifiers: cycle.carbonModifiers
             ) { [weak self] in
                 Task { @MainActor in self?.cycleModule() }
             }
+            recordHotkeyOutcome(
+                id: "cycle",
+                status: status,
+                shortcutName: "Cycle Modules",
+                hotkey: cycle
+            )
         }
+    }
+
+    /// Projects one registration's outcome onto the durable hotkey-failure state. A
+    /// non-`noErr` status records a failure for `id`; `noErr` clears any prior failure
+    /// for that same `id`. Per-id, so failures never overwrite one another.
+    private func recordHotkeyOutcome(
+        id: String,
+        status: OSStatus,
+        shortcutName: String,
+        hotkey: NookHotkey
+    ) {
+        let failure = status == noErr
+            ? nil
+            : HotkeyRegistrationFailure(shortcutName: shortcutName, combination: hotkey.display)
+        appState.recordHotkeyRegistration(id: id, failure: failure)
     }
 
     /// Keeps the live hotkey registration in sync with `appState`: re-register when the
@@ -595,15 +624,20 @@ public final class AppCoordinator: ObservableObject {
 
     // MARK: - Reset
 
-    /// Restores appearance prefs, the global hotkey, keep-open, and expand behavior to
-    /// their defaults. The `$hotkey` binding re-registers the shortcut automatically.
+    /// Restores appearance prefs, the global hotkey, and the display preference to their
+    /// defaults. Every reset routes through `AppState`'s guarded `replace…` path, so
+    /// persistence and observers fire exactly once per preference, in one pattern — no
+    /// direct `appearancePreferences` assignment plus manual `NookAppearanceStore.save`.
+    ///
+    /// `staysExpandedOnHoverExit` is then projected from the freshly reset preference
+    /// rather than a hardcoded `false`: the value comes from `appState.keepNookOpen`
+    /// (which reads `appearancePreferences.keepNookOpen`), so there is no duplicated
+    /// knowledge of what the default keep-open value is.
     public func resetAllSettingsToDefaults() {
-        // `.default` appearance preferences already carry `keepNookOpen == false`.
-        appState.appearancePreferences = .default
-        NookAppearanceStore.save(.default)
+        appState.replaceAppearancePreferences(.default)
         appState.replaceHotkey(.default)
         appState.replaceDisplayPreference(.default)
-        surface.staysExpandedOnHoverExit = false
+        surface.staysExpandedOnHoverExit = appState.keepNookOpen
         syncNotchBackdrop()
     }
 }

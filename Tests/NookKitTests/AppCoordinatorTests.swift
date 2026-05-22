@@ -163,6 +163,31 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(b.switchAwayCount, 1, "B was switched away from after A→B settled")
     }
 
+    /// `registerGlobalHotkey` records its outcome on the durable failure channel.
+    /// A successful registration leaves no `"toggle"` failure entry, and — critically —
+    /// a pre-existing failure entry is cleared once a registration succeeds.
+    func testRegisterGlobalHotkeyClearsFailureOnSuccess() {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+
+        // Seed a stale failure as if a previous registration had failed.
+        coordinator.appState.recordHotkeyRegistration(
+            id: "toggle",
+            failure: HotkeyRegistrationFailure(shortcutName: "Show Nook", combination: "⌥⌘;")
+        )
+        XCTAssertNotNil(coordinator.appState.hotkeyRegistrationFailures["toggle"])
+
+        coordinator.registerGlobalHotkey()
+
+        // The default hotkey registers cleanly, so the seeded failure is cleared.
+        XCTAssertNil(
+            coordinator.appState.hotkeyRegistrationFailures["toggle"],
+            "a successful global-hotkey registration clears the prior failure"
+        )
+    }
+
     /// Switching to the already-active module is a no-op.
     func testSwitchToActiveModuleIsNoOp() async {
         let log = ExpandLog()

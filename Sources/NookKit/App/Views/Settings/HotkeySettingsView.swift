@@ -30,8 +30,8 @@ struct SettingsShortcutRow: View {
                 Text("Show Nook")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.primaryLabel.opacity(0.95))
-                if let error = appState.errorMessage {
-                    Text(error)
+                if let failure = appState.hotkeyRegistrationFailures["toggle"] {
+                    Text(failure.message)
                         .font(.system(size: 9, weight: .regular))
                         .foregroundStyle(Color.orange)
                 } else {
@@ -104,5 +104,48 @@ struct SettingsShortcutRow: View {
         eventMonitor = nil
         isRecording = false
         appState.isRecordingHotkey = false
+    }
+}
+
+/// Surfaces hotkey-registration failures for the host-configured shortcuts — the
+/// module direct-jump keys and the module-cycle key. The user-rebindable show/hide
+/// shortcut reports its own failure inline in ``SettingsShortcutRow``; this row covers
+/// the static shortcuts, which would otherwise fail silently. Renders nothing when
+/// every static shortcut registered successfully.
+struct SettingsHotkeyFailureRow: View {
+    @ObservedObject var appState: AppState
+
+    /// Failures for every shortcut except the show/hide toggle, sorted for stable order.
+    private var staticFailures: [HotkeyRegistrationFailure] {
+        appState.hotkeyRegistrationFailures
+            .filter { $0.key != "toggle" }
+            .values
+            .sorted { $0.shortcutName < $1.shortcutName }
+    }
+
+    var body: some View {
+        if !staticFailures.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(staticFailures, id: \.shortcutName) { failure in
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.orange)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(failure.shortcutName)
+                                .font(.system(size: 11, weight: .medium))
+                            Text(failure.message)
+                                .font(.system(size: 9, weight: .regular))
+                                .foregroundStyle(Color.orange)
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(failure.shortcutName) shortcut unavailable: \(failure.message)")
+                }
+            }
+            .padding(.vertical, 4)
+        }
     }
 }

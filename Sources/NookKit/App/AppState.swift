@@ -13,6 +13,26 @@ public enum NookViewMode: Equatable, Sendable {
     case settings
 }
 
+/// A durable description of a global hotkey that failed to register. Carries the
+/// human-facing shortcut name and the combination that was rejected, so Settings can
+/// tell the user *which* shortcut is unavailable rather than a single shared string.
+public struct HotkeyRegistrationFailure: Equatable, Sendable {
+    /// Human-readable name of the shortcut, e.g. `"Show Nook"` or a module's display name.
+    public let shortcutName: String
+    /// The key combination that failed to register, e.g. `"⌥⌘;"`.
+    public let combination: String
+
+    public init(shortcutName: String, combination: String) {
+        self.shortcutName = shortcutName
+        self.combination = combination
+    }
+
+    /// A ready-to-show one-line warning for the Settings UI.
+    public var message: String {
+        "\(combination) is unavailable — another app may be using it."
+    }
+}
+
 /// Mutable, observable state shared between the coordinator and views.
 /// Holds chrome-level concerns (view mode, appearance, keep-open, visibility) — product
 /// data lives in whatever model layer a downstream fork adds on top.
@@ -44,7 +64,31 @@ public final class AppState: ObservableObject {
     /// coordinator-initiated show/hide. Drive visibility through ``AppCoordinator``,
     /// never by writing this.
     @Published public internal(set) var isNookVisible = false
+
+    /// Transient status channel — a short-lived message tied to a single nook session.
+    /// Cleared by ``resetTransientStatus()`` on every show/toggle. Hotkey-registration
+    /// failures must NOT live here: they outlive a nook session and need to stay visible
+    /// until the registration is fixed. Those use ``hotkeyRegistrationFailures`` instead.
     @Published public var errorMessage: String?
+
+    /// Durable hotkey-registration failures, keyed by ``HotkeyController`` registration id
+    /// (`"toggle"`, `"cycle"`, `"module.<id>"`). Each value is a human-readable failure
+    /// for that specific shortcut. Unlike ``errorMessage`` this is NOT cleared by
+    /// ``resetTransientStatus()``: a failed registration stays surfaced until that
+    /// registration actually succeeds (or the offending hotkey is changed), at which
+    /// point the coordinator clears that id's entry. Each entry reflects the CURRENT
+    /// outcome of its registration — not a last-writer-wins shared string.
+    @Published public internal(set) var hotkeyRegistrationFailures: [String: HotkeyRegistrationFailure] = [:]
+
+    /// Records the outcome of one hotkey registration attempt: `failure` non-nil keeps
+    /// the entry, `nil` clears it. Called by the coordinator after every (re-)register.
+    func recordHotkeyRegistration(id: String, failure: HotkeyRegistrationFailure?) {
+        if let failure {
+            hotkeyRegistrationFailures[id] = failure
+        } else {
+            hotkeyRegistrationFailures.removeValue(forKey: id)
+        }
+    }
 
     /// `true` while the user is recording a new global hotkey in Settings. The coordinator
     /// watches this and suspends the live hotkey registration so the old shortcut can't

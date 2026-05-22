@@ -58,6 +58,10 @@ struct SettingsView: View {
                 SettingsGroupedPanel {
                     VStack(spacing: 0) {
                         SettingsShortcutRow(appState: appState)
+                        if !appState.hotkeyRegistrationFailures.keys.filter({ $0 != "toggle" }).isEmpty {
+                            SettingsInsetDivider()
+                            SettingsHotkeyFailureRow(appState: appState)
+                        }
                         SettingsInsetDivider()
                         SettingActionLine(
                             icon: appState.keepNookOpen ? "pin.fill" : "pin",
