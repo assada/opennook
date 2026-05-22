@@ -101,9 +101,15 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// session state is ``dragSession``; this bool is updated from its `didSet`.
     @Published public private(set) var isDragInFlight: Bool = false
 
-    /// Drop callback invoked when AppKit hands us a file URL drop on the panel. Returning
-    /// `true` accepts the drop; `false` rejects it. Set by the app layer to route the URLs
-    /// through whatever registration / import flow it owns.
+    /// Generic drag-destination callback: invoked when AppKit drops file URLs on the panel.
+    /// Returning `true` accepts the drop; `false` rejects it.
+    ///
+    /// This is the engine's product-agnostic seam, not a "file import" feature. The engine
+    /// only does presentation-container work — it extracts URLs from the drag pasteboard,
+    /// auto-expands a collapsed panel so a drop target is visible (drag-to-reveal), and
+    /// hands the raw URLs to this callback. It does not interpret, store, or copy the
+    /// files. Whatever the URLs *mean* — a shelf, an import flow, a no-op — is entirely the
+    /// app layer's concern; the engine never sees it.
     public var onFileDrop: (([URL]) -> Bool)?
 
     /// Fired when the chrome transitions **into** the expanded surface — from any source:
