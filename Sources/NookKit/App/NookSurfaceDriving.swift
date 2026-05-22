@@ -69,8 +69,8 @@ protocol NookSurfaceDriving: AnyObject {
     /// Pins the chrome window's `NSAppearance`. `nil` follows the system.
     var chromeAppearance: NSAppearance? { get set }
 
-    /// Backdrop layers behind compact and expanded chrome.
-    var backdropConfiguration: NookBackdropConfiguration { get set }
+    /// What the chrome paints behind compact and expanded content.
+    var backdrop: NookBackdrop { get set }
 
     /// Open/close/conversion animation curves.
     var transitionConfiguration: NookTransitionConfiguration { get set }

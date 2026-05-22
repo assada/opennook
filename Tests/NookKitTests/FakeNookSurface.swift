@@ -56,7 +56,7 @@ final class FakeNookSurface: NookSurfaceDriving {
     var staysExpandedOnHoverExit: Bool = false
     var presentation: NookPresentation = .auto
     var chromeAppearance: NSAppearance?
-    var backdropConfiguration: NookBackdropConfiguration = .solidBlack
+    var backdrop: NookBackdrop = .solidBlack
     var transitionConfiguration = NookTransitionConfiguration()
     var windowController: NSWindowController?
 

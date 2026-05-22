@@ -136,8 +136,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         }
     }
 
-    /// Backdrop layers behind compact + expanded chrome (vibrancy or flat fill).
-    @Published public var backdropConfiguration = NookBackdropConfiguration.solidBlack
+    /// What the chrome paints behind compact + expanded content — vibrancy or solid.
+    @Published public var backdrop: NookBackdrop = .solidBlack
 
     /// Pins the chrome window's `NSAppearance`. `nil` follows the system appearance.
     ///

@@ -569,7 +569,7 @@ public final class AppCoordinator: ObservableObject {
         // Pin the window appearance first: the backdrop's visual-effect material resolves
         // against it, so a forced light/dark theme needs both to agree.
         surface.chromeAppearance = appState.appearancePreferences.chromeAppearanceOverride
-        surface.backdropConfiguration = NookBackdropMapping.notchBackdrop(
+        surface.backdrop = NookBackdropMapping.notchBackdrop(
             preferences: appState.appearancePreferences,
             effectiveColorScheme: scheme,
             reduceTransparency: reduceTransparency
