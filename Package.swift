@@ -11,7 +11,7 @@ let strictConcurrency: [SwiftSetting] = [.enableUpcomingFeature("StrictConcurren
 let package = Package(
     name: "Nook",
     platforms: [
-        .macOS(.v13)
+        .macOS("15.0")
     ],
     products: [
         // SPM executable. Backed by a tiny trampoline target so the underlying

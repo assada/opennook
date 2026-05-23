@@ -16,7 +16,7 @@ options:
   bundleIdPrefix: com.example
   createIntermediateGroups: true
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "15.0"
   defaultConfig: Debug
   generateEmptyDirectories: true
   groupSortPosition: top
@@ -43,7 +43,7 @@ targets:
   NookHostApp:
     type: application
     platform: macOS
-    deploymentTarget: "13.0"
+    deploymentTarget: "15.0"
     sources:
       - path: App
         excludes:

@@ -21,8 +21,7 @@ public struct NookTransitionConfiguration: Sendable {
 
     /// Longest duration, in seconds, of any animation supplied above.
     ///
-    /// SwiftUI's `Animation` exposes no portable duration accessor on macOS 13, and
-    /// `withAnimation` has no completion callback there either — so the surface cannot
+    /// SwiftUI's `Animation` exposes no portable duration accessor, so the surface cannot
     /// introspect a custom animation to know when it has visibly finished. An awaited
     /// `expand()`/`compact()` documents that it "returns once the chrome has visibly
     /// arrived"; to honor that contract for a *non-default* (typically slower) animation,

@@ -4,7 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![License: MIT (NookSurface)](https://img.shields.io/badge/NookSurface-MIT-blue.svg)](LICENSE-MIT-NOOKSURFACE)
 [![Swift 5.9+](https://img.shields.io/badge/swift-5.9%2B-orange.svg)](https://swift.org)
-[![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#requirements)
+[![Platform: macOS 15+](https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey.svg)](#requirements)
 [![Swift Package Index](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FglendonC%2Fopennook%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/glendonC/opennook)
 [![Swift Package Index](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FglendonC%2Fopennook%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/glendonC/opennook)
 
@@ -101,7 +101,7 @@ you want one. It is not pulled in by `NookApp`.
 
 ## Requirements
 
-- macOS 13 or later
+- macOS 15 or later
 - Xcode command line tools
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
   - only if you want the Xcode project

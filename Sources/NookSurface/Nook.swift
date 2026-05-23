@@ -716,8 +716,8 @@ extension Nook {
     /// Settle allowance after a fresh open animation (`.hidden` → visible) before an
     /// awaited `expand()`/`compact()` returns.
     ///
-    /// SwiftUI's `withAnimation` exposes no portable completion callback on macOS 13, so
-    /// the surface cannot observe when an animation has actually finished. Instead the
+    /// SwiftUI's `Animation` exposes no portable duration accessor, so the surface cannot
+    /// time the chrome's visible arrival from the animation itself. Instead the
     /// settle delay is derived from the *configured* animation duration
     /// (``settleAnimationDuration``) plus a fixed cushion for the window-show fade — so
     /// the await contract holds whether the host keeps the default curves or supplies a
