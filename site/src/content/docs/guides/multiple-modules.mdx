@@ -3,7 +3,7 @@ title: Multiple modules
 description: Run several interchangeable notch apps on one surface.
 ---
 
-A single host can run several interchangeable *modules* — independent notch
+A single host can run several interchangeable *modules* - independent notch
 apps sharing one surface, one menu bar, and one set of preferences. Each
 module ships its own `NookConfiguration`, its own services, and an optional
 global shortcut for direct-jump or cycle-through. Use this when the notch
@@ -33,7 +33,7 @@ NookApp.main(host)
 ```
 
 The active module's hooks and services drive the surface; switching is one
-atomic transaction on the lifecycle chain — no half-applied state, no
+atomic transaction on the lifecycle chain - no half-applied state, no
 arbiter claims leaking across modules.
 
 See `Examples/MultiNook/main.swift` in the repo for the full pattern: a

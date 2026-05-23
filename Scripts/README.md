@@ -3,12 +3,12 @@
 Developer scripts. All are simple wrappers around `swift` / `xcodegen`; none
 are required to build or run the app.
 
-- `apply-license-headers.sh` — stamp the SPDX/Apache-2.0 header on new files.
-- `dev-run.sh` — `swift run Nook` with the right env. Headless
+- `apply-license-headers.sh` - stamp the SPDX/Apache-2.0 header on new files.
+- `dev-run.sh` - `swift run Nook` with the right env. Headless
   iteration; no `Info.plist`, so URL-scheme dispatch does NOT work in this
   build. Use Cmd-R in Xcode for the bundled `.app`.
-- `watch-run.sh` — auto-rebuild on file change for tight UI iteration.
-- `regenerate-xcodeproj.sh` — rebuilds `Nook.xcodeproj` from
+- `watch-run.sh` - auto-rebuild on file change for tight UI iteration.
+- `regenerate-xcodeproj.sh` - rebuilds `Nook.xcodeproj` from
   `project.yml` (source of truth). Run after editing `project.yml`, or after
   a fresh clone before opening in Xcode the first time. Requires `xcodegen`
   (`brew install xcodegen`).

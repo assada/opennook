@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for filing a bug. A small reproduction beats a long description —
+        Thanks for filing a bug. A small reproduction beats a long description -
         if you can, attach a minimal example (one `main.swift`) or point at a
         commit.
 
@@ -23,11 +23,11 @@ body:
       label: Reproduction
       description: |
         Concrete steps. Ideally a minimal SwiftPM project or a tweak to one of
-        the `Examples/*`. Include the exact `swift run …` invocation.
+        the `Examples/*`. Include the exact `swift run ...` invocation.
       placeholder: |
         1. swift run HelloNook
         2. Hover the notch
-        3. …
+        3. ...
     validations:
       required: true
 

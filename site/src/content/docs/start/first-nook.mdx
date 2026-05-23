@@ -3,7 +3,7 @@ title: Your first nook
 description: Register a view, customize the chrome, drive the lifecycle.
 ---
 
-You depend on OpenNook as a package and customize it through public API —
+You depend on OpenNook as a package and customize it through public API -
 you do **not** fork the framework. Four steps take you from empty target to
 running notch app.
 
@@ -23,7 +23,7 @@ Run it and press **⌥⌘;** (or use the menu-bar item) to expand the nook.
 
 ## 2. Customize via `NookConfiguration`
 
-Use this when you need more than a home view — the compact slots, the
+Use this when you need more than a home view - the compact slots, the
 chrome theme, the top bar's leading label/icon, the chrome flags, lifecycle
 hooks, and file drops:
 
@@ -33,7 +33,7 @@ configuration.setHome { MyHomeView() }
 configuration.setCompactTrailing { MyGlyph() }
 configuration.theme = { appState in MyPalette.resolve(appState) }
 
-// Top bar — leading cluster identity and chrome flags live on `topBar`.
+// Top bar - leading cluster identity and chrome flags live on `topBar`.
 configuration.topBar.leadingTitle = { _ in "Today" }  // default: "Home"
 configuration.topBar.leadingIcon = nil                // default: "house"
 configuration.topBar.showsTopBar = true               // false strips top bar + gear + lock
@@ -54,7 +54,7 @@ environment value and shared services from `\.appServices`.
 
 ## 3. Add your state and services
 
-`AppState` (`Sources/NookKit/App/AppState.swift`) holds chrome state — add
+`AppState` (`Sources/NookKit/App/AppState.swift`) holds chrome state - add
 product state alongside it. `AppServices`
 (`Sources/NookKit/App/AppServices.swift`) is the dependency container
 threaded into views.

@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        OpenNook is small and opinionated — not every good idea fits. Before
+        OpenNook is small and opinionated - not every good idea fits. Before
         filing, please skim the README and (if you can) the roadmap to see
         whether the feature is already planned, deliberately deferred, or
         explicitly out of scope.
@@ -24,11 +24,11 @@ body:
       label: Proposed solution
       description: |
         How would you like this to work? If it's an API change, sketch the call
-        site — that surfaces ergonomics faster than prose.
+        site - that surfaces ergonomics faster than prose.
       placeholder: |
         ```swift
         var configuration = NookConfiguration()
-        configuration.foo = …
+        configuration.foo = ...
         ```
     validations:
       required: true
@@ -46,9 +46,9 @@ body:
     attributes:
       label: Which layer would this live in?
       options:
-        - NookSurface (MIT — notch window engine; keep thin)
-        - NookKit (Apache-2.0 — app chrome)
-        - NookComponents (Apache-2.0 — opt-in add-ons)
+        - NookSurface (MIT - notch window engine; keep thin)
+        - NookKit (Apache-2.0 - app chrome)
+        - NookComponents (Apache-2.0 - opt-in add-ons)
         - NookApp / demo app
         - Documentation / examples
         - Not sure

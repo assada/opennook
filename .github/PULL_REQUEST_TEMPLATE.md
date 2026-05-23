@@ -1,5 +1,5 @@
 <!--
-  Thanks for contributing to OpenNook. Keep this short — the diff is the
+  Thanks for contributing to OpenNook. Keep this short - the diff is the
   source of truth; this template is the surrounding context a reviewer needs.
 -->
 
@@ -24,6 +24,6 @@
 
 <!--
   Anything non-obvious: deliberate omissions, follow-up work, API surface
-  changes, license-header implications (NookSurface stays MIT — everything
+  changes, license-header implications (NookSurface stays MIT - everything
   else Apache-2.0). Delete this section if there's nothing to call out.
 -->

@@ -5,7 +5,7 @@
 # The app target is intentionally thin: its only Swift source is
 # `App/main.swift`, which imports the `NookApp` library from the local SPM
 # package and calls `NookApp.main()`. All real code lives in the SPM targets
-# — Xcode owns nothing but the bundle (Info.plist, signing).
+# Xcode owns nothing but the bundle (Info.plist, signing).
 #
 # The SPM trampoline at `Sources/NookExecutable/main.swift` mirrors this
 # trampoline so `swift run Nook` and Cmd-R behave identically modulo bundle

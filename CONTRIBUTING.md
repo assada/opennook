@@ -1,6 +1,6 @@
 # Contributing to OpenNook
 
-Thanks for the interest. OpenNook is a small, opinionated framework — most
+Thanks for the interest. OpenNook is a small, opinionated framework - most
 contributions land faster when scoped against the roadmap or an existing
 issue, so for anything larger than a typo or a one-file fix, **open an issue
 first** to align on approach.
@@ -21,24 +21,24 @@ brew install xcodegen
 open Nook.xcodeproj
 ```
 
-`Nook.xcodeproj` is a generated artifact — `project.yml` is the source of
+`Nook.xcodeproj` is a generated artifact - `project.yml` is the source of
 truth. Both build paths compile the same SwiftPM modules; behavior cannot
 drift between them.
 
 ## Project layout
 
-- `Sources/NookSurface/` — the notch window engine. **MIT-licensed** (forked
+- `Sources/NookSurface/` - the notch window engine. **MIT-licensed** (forked
   from [DynamicNotchKit](https://github.com/MrKai77/DynamicNotchKit)). Keep
-  this layer thin — no app/product logic.
-- `Sources/NookKit/` — app chrome: lifecycle, state, settings, hotkey.
+  this layer thin - no app/product logic.
+- `Sources/NookKit/` - app chrome: lifecycle, state, settings, hotkey.
   Apache-2.0.
-- `Sources/NookApp/` + `NookExecutable/` + `App/` — minimal demo app and
+- `Sources/NookApp/` + `NookExecutable/` + `App/` - minimal demo app and
   launch trampolines.
-- `Sources/NookComponents/` — opt-in add-ons (file shelf, activity queue,
+- `Sources/NookComponents/` - opt-in add-ons (file shelf, activity queue,
   volume glyph). Apache-2.0.
-- `Examples/` — single-file demonstrations of the public API. Each example
+- `Examples/` - single-file demonstrations of the public API. Each example
   is one `main.swift` showing one concept.
-- `Tests/` — `NookKitTests` and `NookComponentsTests`.
+- `Tests/` - `NookKitTests` and `NookComponentsTests`.
 
 ## License headers
 
@@ -54,7 +54,7 @@ the header from a neighboring file in the same module.
 ## Coding conventions
 
 - **Strict concurrency.** Every target opts into `StrictConcurrency` via
-  `Package.swift`. New code must compile clean under the strict checker — no
+  `Package.swift`. New code must compile clean under the strict checker - no
   silenced warnings, no `@unchecked Sendable` without a written reason.
 - **MainActor where it belongs.** UI types, the coordinator, and anything
   touching `NSApp`/`NSWindow` are `@MainActor`. Components that only model
@@ -65,12 +65,12 @@ the header from a neighboring file in the same module.
 - **Tests.** Anything non-trivial needs coverage. Tests run with
   `swift test --parallel` in CI.
 - **No new dependencies** without discussion. The framework currently has
-  zero runtime third-party dependencies — keep it that way unless there's a
+  zero runtime third-party dependencies - keep it that way unless there's a
   strong reason.
 
 ## Examples
 
-`Examples/*` are how developers learn the API — they're the README's
+`Examples/*` are how developers learn the API - they're the README's
 companion, not a dumping ground. Each example demonstrates **one** concept
 and uses **only the public API** (no `@testable`, no module-internal
 reaches). If a concept needs a new example, propose it in an issue.

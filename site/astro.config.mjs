@@ -17,7 +17,7 @@ export default defineConfig({
       ],
       defaultLocale: 'en',
       // Dark mode by default; users can still toggle to light.
-      // Starlight uses `prefers-color-scheme` by default — pin to dark.
+      // Starlight uses `prefers-color-scheme` by default; pin to dark.
       // The `head` injection sets the initial theme attribute.
       head: [
         {

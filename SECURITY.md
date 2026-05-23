@@ -27,7 +27,7 @@ ask to stay anonymous).
 
 OpenNook is a macOS framework, not a service. The realistic risk surface:
 
-- **NookSurface** runs an `NSPanel` with elevated window level — bugs here
+- **NookSurface** runs an `NSPanel` with elevated window level - bugs here
   could affect window-layer behavior of the host app.
 - **HotkeyController** uses Carbon's `RegisterEventHotKey`; mis-registered
   hotkeys can swallow keystrokes intended for other apps.
@@ -36,4 +36,4 @@ OpenNook is a macOS framework, not a service. The realistic risk surface:
 - **No network code.** The framework makes no outbound connections.
 
 Bugs in the demo app's signing / notarization configuration are not in
-scope — those are a packaging concern per host.
+scope - those are a packaging concern per host.
