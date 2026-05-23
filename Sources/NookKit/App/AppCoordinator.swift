@@ -456,7 +456,12 @@ public final class AppCoordinator: ObservableObject {
     /// The arbiter's stale-token guard makes an abandoned `prepareForSwitchAway` safe:
     /// any `endTransientPresentation` it issues against an invalidated claim is a
     /// no-op on the surface.
-    private static func runWithTimeout(
+    ///
+    /// `internal` rather than `private` so the test suite can exercise the deadline
+    /// directly with short timeouts — driving the production path via
+    /// ``performSwitch(to:)`` would require waiting the full ``switchAwayTimeout``
+    /// (2 s) per case.
+    static func runWithTimeout(
         _ timeout: Duration,
         label: String,
         _ work: @escaping @MainActor @Sendable () async -> Void

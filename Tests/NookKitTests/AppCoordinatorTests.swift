@@ -622,4 +622,58 @@ final class AppCoordinatorTests: XCTestCase {
             "open + cancel recorder fires one restore registration"
         )
     }
+
+    // MARK: - runWithTimeout (switch-tail deadline)
+
+    /// Reference box for the cancelled-vs-finished signal from a parked work body.
+    /// `@unchecked Sendable` so the `@MainActor` work closure can write to it from
+    /// inside a Task spawned by `runWithTimeout`.
+    private final class TimeoutOutcome: @unchecked Sendable {
+        var didFinish = false
+        var didCancel = false
+    }
+
+    /// The deadline actually fires: `runWithTimeout` returns within roughly the
+    /// configured duration even if `work` parks indefinitely, and the work task is
+    /// cancelled (`Task.sleep` throws) rather than left running.
+    func testRunWithTimeoutCancelsWorkPastDeadline() async throws {
+        let outcome = TimeoutOutcome()
+        let start = Date()
+
+        await AppCoordinator.runWithTimeout(.milliseconds(80), label: "test.deadline") {
+            do {
+                try await Task.sleep(for: .seconds(60))
+                outcome.didFinish = true
+            } catch {
+                outcome.didCancel = true
+            }
+        }
+
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(
+            elapsed, 1.0,
+            "runWithTimeout returned in \(elapsed)s — must be near the 80 ms deadline, not the 60 s parked sleep"
+        )
+        XCTAssertFalse(outcome.didFinish, "the parked work must not be allowed to finish")
+        XCTAssertTrue(outcome.didCancel, "the work task must be cancelled (Task.sleep throws)")
+    }
+
+    /// Work that finishes inside the deadline returns promptly without timing out:
+    /// the timer task is cancelled, the timeout log does not print, the outcome is
+    /// "finished" not "cancelled."
+    func testRunWithTimeoutCompletesCleanlyWhenWorkFinishesFast() async throws {
+        let outcome = TimeoutOutcome()
+
+        await AppCoordinator.runWithTimeout(.seconds(5), label: "test.fast") {
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+                outcome.didFinish = true
+            } catch {
+                outcome.didCancel = true
+            }
+        }
+
+        XCTAssertTrue(outcome.didFinish, "fast work must complete normally")
+        XCTAssertFalse(outcome.didCancel, "no cancellation when work finished under the deadline")
+    }
 }
