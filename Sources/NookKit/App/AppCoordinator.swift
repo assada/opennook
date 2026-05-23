@@ -330,14 +330,23 @@ public final class AppCoordinator: ObservableObject {
         //    the synthetic onExpand below provably fires the *incoming* module's hook.
         applyModuleHooks(moduleHost.configuration)
 
-        // 6. An unloaded module is rebuilt fresh on return, so its onReady must fire
+        // 6. If the incoming module disables Settings (showsSettings == false), drop any
+        //    stranded `.settings` viewMode so the chrome doesn't render a back-chevron
+        //    pointing at a Settings screen that isn't reachable. The expanded view
+        //    already gates on `showsSettings && isSettingsView`, but the top bar's
+        //    leading cluster also reads viewMode and would otherwise misrender.
+        if !moduleHost.configuration.topBar.showsSettings, appState.viewMode == .settings {
+            appState.showHome()
+        }
+
+        // 7. An unloaded module is rebuilt fresh on return, so its onReady must fire
         //    again; give the incoming module its once-per-instance onReady.
         if !moduleHost.registry.isLoaded(outgoingID) {
             modulesGivenOnReady.remove(outgoingID)
         }
         fireModuleReadyIfNeeded()
 
-        // 7. If the surface was expanded, synthesize an onExpand for the incoming module
+        // 8. If the surface was expanded, synthesize an onExpand for the incoming module
         //    so its content sees a consistent lifecycle.
         if wasExpanded {
             moduleHost.configuration.onExpand?()
@@ -512,24 +521,44 @@ public final class AppCoordinator: ObservableObject {
         appState.recordHotkeyRegistration(id: id, failure: failure)
     }
 
+    /// The dedup key for the hotkey-registration sink: one *intent change* per user
+    /// action, not one emission per upstream `@Published` update.
+    private enum HotkeyRegistrationIntent: Equatable {
+        /// Recorder is open — live registration is suspended.
+        case suspended
+        /// Recorder is closed — this hotkey should be registered.
+        case bound(NookHotkey)
+    }
+
     /// Keeps the live hotkey registration in sync with `appState`: re-register when the
     /// user picks a new shortcut, and suspend registration entirely while recording.
     ///
-    /// Combined into a single sink so a recording-finished event (which fires both
-    /// `$hotkey` and `$isRecordingHotkey` on the same runloop turn) re-registers
-    /// once, not twice — and the durable failure channel records one outcome per
-    /// user action instead of two.
-    private func bindHotkeyRegistration() {
+    /// `combineLatest` emits once per upstream `@Published` change. A user finishing
+    /// recording flips both `$hotkey` (new value) and `$isRecordingHotkey` (false) on
+    /// the same runloop turn — two emissions. A naive `removeDuplicates(by: ==)` on
+    /// the raw pair wouldn't dedup them (they're distinct), so the sink would unregister
+    /// then re-register an extra time, recording the registration outcome twice on the
+    /// durable failure channel. Mapping to a `HotkeyRegistrationIntent` collapses the
+    /// pair onto *what should happen* — and a recorder opened+cancelled without any
+    /// key change deduces to one no-op.
+    ///
+    /// `internal`, not `private`, so tests can install the sink without bringing up
+    /// `NSApp` via the full `start()` path.
+    func bindHotkeyRegistration() {
         appState.$hotkey
             .combineLatest(appState.$isRecordingHotkey)
+            .map { hotkey, isRecording -> HotkeyRegistrationIntent in
+                isRecording ? .suspended : .bound(hotkey)
+            }
             .dropFirst()  // skip the cold-launch publish of initial values
-            .removeDuplicates(by: { $0 == $1 })
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] _, isRecording in
+            .sink { [weak self] intent in
                 guard let self else { return }
-                if isRecording {
+                switch intent {
+                case .suspended:
                     self.hotkeyController.unregister(Self.toggleHotkeyID)
-                } else {
+                case .bound:
                     self.registerGlobalHotkey()
                 }
             }

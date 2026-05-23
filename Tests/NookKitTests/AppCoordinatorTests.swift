@@ -406,4 +406,142 @@ final class AppCoordinatorTests: XCTestCase {
             "end-during-engagement leaves the user's state alone (no restore)"
         )
     }
+
+    // MARK: - viewMode coherence across module switch
+
+    /// Regression: switching to a module whose `topBar.showsSettings == false` must drop
+    /// any stranded `viewMode == .settings`. Without this, the chrome's top bar reads a
+    /// settings-mode viewMode and renders a back-chevron at a Settings screen that
+    /// `NookExpandedView` correctly refuses to mount — the user sees a phantom nav target.
+    func testSwitchToModuleWithSettingsDisabledClearsStrandedSettingsViewMode() async {
+        final class SettingsHidingModule: NookModule {
+            let descriptor: NookModuleDescriptor
+            init(id: String) {
+                descriptor = NookModuleDescriptor(id: id, displayName: id, backgroundPolicy: .stayResident)
+            }
+            func makeConfiguration() -> NookConfiguration {
+                var configuration = NookConfiguration()
+                configuration.topBar.showsSettings = false
+                return configuration
+            }
+            func prepareForSwitchAway() async {}
+        }
+
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)  // showsSettings == true (default)
+        let b = SettingsHidingModule(id: "B")
+        let surface = FakeNookSurface()
+
+        var host = NookHostConfiguration()
+        let aRef = a
+        host.register(aRef.descriptor) { _ in aRef }
+        let bRef = b
+        host.register(bRef.descriptor) { _ in bRef }
+        host.defaultModule = "A"
+        let coordinator = AppCoordinator(
+            moduleHost: ModuleHost(registry: host.makeRegistry()),
+            surface: surface
+        )
+
+        // User opens Settings while on A — viewMode strands to .settings.
+        coordinator.appState.showSettings()
+        XCTAssertEqual(coordinator.appState.viewMode, .settings)
+
+        coordinator.switchModule(to: "B")
+        await coordinator.drainLifecycleForTesting()
+
+        XCTAssertEqual(coordinator.activeModuleID, "B")
+        XCTAssertEqual(
+            coordinator.appState.viewMode, .home,
+            "incoming module disables Settings — viewMode must snap to .home"
+        )
+    }
+
+    /// Counter: switching to a module that *also* allows Settings must NOT touch a
+    /// `.settings` viewMode. The fix is narrow — only clear when the incoming module
+    /// disables the Settings screen.
+    func testSwitchPreservesSettingsViewModeWhenIncomingModuleAllowsIt() async {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let b = SpyModule(id: "B", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a, b], surface: surface)
+
+        coordinator.appState.showSettings()
+        XCTAssertEqual(coordinator.appState.viewMode, .settings)
+
+        coordinator.switchModule(to: "B")
+        await coordinator.drainLifecycleForTesting()
+
+        XCTAssertEqual(
+            coordinator.appState.viewMode, .settings,
+            "incoming module still allows Settings — viewMode preserved"
+        )
+    }
+
+    // MARK: - Hotkey registration intent dedup
+
+    /// Regression: a recording-finished event flips both `$hotkey` and
+    /// `$isRecordingHotkey` on the same runloop turn. The sink used to react to each
+    /// upstream emission separately, recording the registration outcome twice on the
+    /// durable failure channel and minting two fresh Carbon ids per rebind. Mapping the
+    /// combineLatest pair onto a `HotkeyRegistrationIntent` collapses the two emissions
+    /// onto one *intent change* (suspended → bound), and `removeDuplicates` then dedups
+    /// transitional duplicates.
+    func testHotkeyRebindFiresExactlyOneRegisterPerUserAction() async throws {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+        coordinator.registerGlobalHotkey()  // initial registration (start()'s job)
+        coordinator.bindHotkeyRegistration()  // install the sink
+        let mintedAfterStart = coordinator.hotkeyController.carbonIDsMintedForTesting
+
+        // Open the recorder — intent maps to `.suspended`; sink unregisters (no mint).
+        coordinator.appState.isRecordingHotkey = true
+        try await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertEqual(
+            coordinator.hotkeyController.carbonIDsMintedForTesting, mintedAfterStart,
+            "unregister mints nothing"
+        )
+
+        // User picks a new hotkey, then closes the recorder. Both publishes happen on
+        // the same runloop turn — the sink must fire exactly ONE register for the new
+        // hotkey, not one per upstream @Published change.
+        let newHotkey = NookHotkey(keyCode: 51, carbonModifiers: 4096 | 2048, keySymbol: "⌫")
+        coordinator.appState.replaceHotkey(newHotkey)
+        coordinator.appState.isRecordingHotkey = false
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(
+            coordinator.hotkeyController.carbonIDsMintedForTesting,
+            mintedAfterStart + 1,
+            "one register per user action, not one per upstream @Published change"
+        )
+        XCTAssertTrue(coordinator.hotkeyController.registeredIDsForTesting.contains(NookHotkeyIDs.toggle))
+    }
+
+    /// Recorder opened and then cancelled without changing the key collapses through
+    /// `.suspended` → `.bound(unchanged)` — exactly one restore registration after the
+    /// unregister.
+    func testHotkeyRecorderOpenedAndCancelledIsBoundedRoundTrip() async throws {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+        coordinator.registerGlobalHotkey()
+        coordinator.bindHotkeyRegistration()
+        let mintedAfterStart = coordinator.hotkeyController.carbonIDsMintedForTesting
+
+        coordinator.appState.isRecordingHotkey = true
+        try await Task.sleep(nanoseconds: 30_000_000)
+        coordinator.appState.isRecordingHotkey = false
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(
+            coordinator.hotkeyController.carbonIDsMintedForTesting,
+            mintedAfterStart + 1,
+            "open + cancel recorder fires one restore registration"
+        )
+    }
 }
