@@ -92,6 +92,13 @@ public final class AppCoordinator: ObservableObject {
     /// publisher to drive ``userEngagementChanges``.
     private let userInitiatedOpenSubject = CurrentValueSubject<Bool, Never>(false)
 
+    /// The host-wide ``NookPresentationPinning`` broker. Folded into
+    /// ``isUserEngaged`` and ``userEngagementChanges`` so a popover/sheet pin
+    /// suppresses the hover-exit auto-compact AND denies competing arbiter
+    /// claims for the duration. See ``bindPresentationPinning()`` for the
+    /// surface-side wiring (the `staysExpandedOnHoverExit` override).
+    var presentationPinning: NookPresentationPinning { moduleHost.registry.presentationPinning }
+
     /// Single setter for ``userInitiatedOpen`` that publishes through
     /// ``userInitiatedOpenSubject``. Idempotent: a no-op when the value is unchanged.
     private func setUserInitiatedOpen(_ value: Bool) {
@@ -274,6 +281,10 @@ public final class AppCoordinator: ObservableObject {
         // it being live from the moment the coordinator exists — including in tests
         // that construct a coordinator without calling `start()`.
         bindSurfaceVisibility()
+        // Likewise bind the presentation-pin projection at init: tests that exercise
+        // `pin()`/`release()` against a windowless coordinator depend on the
+        // `staysExpandedOnHoverExit` override flipping without going through `start()`.
+        bindPresentationPinning()
 
         coordinatorBox.coordinator = self
         // Project the active module's lifecycle callbacks onto the surface. The hooks
@@ -850,16 +861,33 @@ public final class AppCoordinator: ObservableObject {
         surface.staysExpandedOnHoverExit = appState.keepNookOpen
     }
 
-    /// Pin the nook open while a transient interaction (sheet, modal) is presented.
-    /// macOS sheets surface in a new window above the notch, which moves the pointer outside
-    /// the notch's hover region and causes auto-compact. Calling this with `true` suspends
-    /// auto-compact; `false` restores the user's `keepNookOpen` preference.
-    public func setStaysExpandedOverride(_ active: Bool) {
+    /// Projects the boolean "ignore hover-exit auto-compact" override onto the surface.
+    /// Internal because modules should not flip this directly — they pin and unpin
+    /// through ``NookPresentationPinning`` (resolved from `\.appServices`), which
+    /// ref-counts overlapping presenters and folds into ``isUserEngaged`` for the
+    /// arbiter. This method is the broker's lone client; it is also called by
+    /// ``resetAllSettingsToDefaults()`` and the user-action entry points to project
+    /// the persisted `keepNookOpen` preference back onto the surface.
+    func setStaysExpandedOverride(_ active: Bool) {
         if active {
             surface.staysExpandedOnHoverExit = true
         } else {
             surface.staysExpandedOnHoverExit = appState.keepNookOpen
         }
+    }
+
+    /// Subscribes the coordinator to the host-wide ``NookPresentationPinning``
+    /// broker. The broker emits on 0->1 and N->0 pin-count edges; on each edge we
+    /// project the boolean onto the surface via ``setStaysExpandedOverride(_:)``.
+    /// The arbiter side is wired implicitly through ``isUserEngaged`` and
+    /// ``userEngagementChanges`` — both already consult `presentationPinning`.
+    private func bindPresentationPinning() {
+        presentationPinning.pinChanges
+            .receive(on: RunLoop.main)
+            .sink { [weak self] pinned in
+                self?.setStaysExpandedOverride(pinned)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Reset
@@ -885,22 +913,38 @@ public final class AppCoordinator: ObservableObject {
 // MARK: - NookSurfacePresenting
 
 extension AppCoordinator: NookSurfacePresenting {
-    /// The user owns the surface while they're hovering it or while they opened it
-    /// themselves; a transient presenter pauses in either case.
+    /// The user owns the surface while they're hovering it, while they opened it
+    /// themselves, or while a module's transient presentation (popover/sheet) has the
+    /// notch pinned via ``NookPresentationPinning``. A transient arbiter presenter
+    /// pauses in any of those cases.
     ///
     /// Sources from ``userInitiatedOpen`` (user intent) — NOT `appState.isNookVisible`
     /// (surface mirror) — so the arbiter's own `expand()` never trips this gate on a
     /// subsequent preempting claim.
+    ///
+    /// **The pin disjunct closes a real hole**, not a theoretical one. A hover-opened
+    /// surface has `userInitiatedOpen == false`; the moment a module presents a
+    /// `.popover` the pointer leaves the notch window and `surface.isHovering` flips
+    /// `false`; without the pin, a competing `.urgent` claim from another module would
+    /// be granted at that exact moment and yank the surface from under the popover.
     public var isUserEngaged: Bool {
-        userInitiatedOpen || surface.isHovering
+        userInitiatedOpen || surface.isHovering || presentationPinning.isPinned
     }
 
-    /// Emits whenever ``isUserEngaged`` changes — the merge of the user-intent flag and
-    /// the surface's hover publisher, deduplicated.
+    /// Emits whenever ``isUserEngaged`` changes — the merge of the user-intent flag,
+    /// the surface's hover publisher, and the presentation-pin broker, deduplicated.
+    ///
+    /// Verified: in-tree consumers of `isUserEngaged` / `userEngagementChanges`
+    /// (``NookActivityQueue/waitWhileUserEngaged(_:)`` at NookActivityQueue.swift:234,
+    /// ``SurfaceArbiter``'s engagement gate at SurfaceArbiter.swift:109/198) are
+    /// idempotent under repeated same-value events — the activity queue polls in a
+    /// while-loop, and the arbiter consults the flag fresh on each claim. Adding a
+    /// third publisher to the `combineLatest` increases emission frequency only on
+    /// pin transitions, which `removeDuplicates()` collapses to the true edges.
     public var userEngagementChanges: AnyPublisher<Bool, Never> {
         userInitiatedOpenSubject
-            .combineLatest(surface.isHoveringPublisher)
-            .map { $0 || $1 }
+            .combineLatest(surface.isHoveringPublisher, presentationPinning.pinChanges)
+            .map { $0 || $1 || $2 }
             .removeDuplicates()
             .eraseToAnyPublisher()
     }

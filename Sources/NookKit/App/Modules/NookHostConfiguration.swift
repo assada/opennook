@@ -115,7 +115,8 @@ public struct NookHostConfiguration: Sendable {
             registrations: entries,
             defaultModuleID: defaultID,
             cycleHotkey: moduleCycleHotkey,
-            branding: branding
+            branding: branding,
+            presentationPinning: NookPresentationPinning()
         )
     }
 }

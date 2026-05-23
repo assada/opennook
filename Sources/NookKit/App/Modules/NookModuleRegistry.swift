@@ -42,6 +42,12 @@ public final class NookModuleRegistry {
     /// configuration value.
     public let branding: NookHostBranding
 
+    /// One broker per host process, shared across every module. Registered into each
+    /// module's ``AppServices`` as ``NookModuleContext`` is built, so a view in module A
+    /// and a view in module B both resolve the same instance — pins compose into one
+    /// aggregate signal the coordinator can fold into ``AppCoordinator/isUserEngaged``.
+    public let presentationPinning: NookPresentationPinning
+
     private var instances: [String: NookModule] = [:]
     private var contexts: [String: NookModuleContext] = [:]
 
@@ -49,12 +55,14 @@ public final class NookModuleRegistry {
         registrations: [Registration],
         defaultModuleID: String,
         cycleHotkey: NookHotkey?,
-        branding: NookHostBranding = .default
+        branding: NookHostBranding = .default,
+        presentationPinning: NookPresentationPinning = NookPresentationPinning()
     ) {
         self.registrations = registrations
         self.defaultModuleID = defaultModuleID
         self.cycleHotkey = cycleHotkey
         self.branding = branding
+        self.presentationPinning = presentationPinning
     }
 
     /// All registered modules' descriptors, in registration order — the switcher's list.
@@ -74,7 +82,10 @@ public final class NookModuleRegistry {
         guard let registration = registrations.first(where: { $0.descriptor.id == id }) else {
             return nil
         }
-        let context = NookModuleContext.makeDefault(for: registration.descriptor)
+        let context = NookModuleContext.makeDefault(
+            for: registration.descriptor,
+            presentationPinning: presentationPinning
+        )
         let module = registration.factory(context)
         contexts[id] = context
         instances[id] = module

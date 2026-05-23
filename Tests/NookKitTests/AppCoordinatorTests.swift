@@ -676,4 +676,118 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertTrue(outcome.didFinish, "fast work must complete normally")
         XCTAssertFalse(outcome.didCancel, "no cancellation when work finished under the deadline")
     }
+
+    // MARK: - Presentation pinning
+
+    /// A pin acquired through the host-wide ``NookPresentationPinning`` broker projects
+    /// onto `surface.staysExpandedOnHoverExit` — so a popover that moves the pointer out
+    /// of the notch window no longer triggers the hover-exit auto-compact.
+    func testPresentationPinFlipsStaysExpandedOnHoverExit() async {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+        // AppState loads `keepNookOpen` from UserDefaults, which other tests have
+        // mutated and persisted. Reset to defaults so the post-release assertion
+        // observes the known-default value rather than leaked state.
+        coordinator.resetAllSettingsToDefaults()
+
+        XCTAssertFalse(surface.staysExpandedOnHoverExit, "reset baseline: hover-exit auto-compacts")
+
+        let handle = coordinator.presentationPinning.pin()
+        await drainAndPump(coordinator)
+        XCTAssertTrue(surface.staysExpandedOnHoverExit, "pin suppresses hover-exit auto-compact")
+
+        handle.release()
+        await drainAndPump(coordinator)
+        XCTAssertFalse(
+            surface.staysExpandedOnHoverExit,
+            "last release restores the user's keepNookOpen preference (default: false)"
+        )
+    }
+
+    /// REGRESSION: a pin counts as user engagement. Before this wiring, a hover-opened
+    /// surface presenting a popover had `userInitiatedOpen == false` and the popover
+    /// drove `surface.isHovering` to `false` (pointer left the notch window), so a
+    /// concurrent `.urgent` arbiter claim was granted and yanked the surface from under
+    /// the popover.
+    func testPresentationPinCountsAsUserEngagement() async {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+
+        // Neither hover nor user-open intent is set — but pinning *is* engagement.
+        XCTAssertFalse(coordinator.isUserEngaged, "baseline: nothing engaging the surface")
+
+        let handle = coordinator.presentationPinning.pin()
+        XCTAssertTrue(coordinator.isUserEngaged, "pin counts as engagement")
+
+        let denied = await coordinator.beginTransientPresentation(
+            NookSurfaceClaim(moduleID: "A", priority: .urgent)
+        )
+        XCTAssertNil(denied, "even an urgent claim is denied while a pin is held")
+
+        handle.release()
+        XCTAssertFalse(coordinator.isUserEngaged, "release returns engagement to baseline")
+
+        let granted = await coordinator.beginTransientPresentation(
+            NookSurfaceClaim(moduleID: "A", priority: .urgent)
+        )
+        XCTAssertNotNil(granted, "with the pin released the claim is grantable")
+    }
+
+    /// Two overlapping pins (e.g., a popover atop a sheet) both compose: the surface
+    /// stays pinned until the last release, and engagement tracks the same edge.
+    func testOverlappingPinsRefCount() async {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+        coordinator.resetAllSettingsToDefaults()  // hygiene: persisted UserDefaults
+
+        let first = coordinator.presentationPinning.pin(reason: "popover")
+        let second = coordinator.presentationPinning.pin(reason: "sheet")
+        await drainAndPump(coordinator)
+        XCTAssertTrue(surface.staysExpandedOnHoverExit)
+        XCTAssertTrue(coordinator.isUserEngaged)
+
+        first.release()
+        await drainAndPump(coordinator)
+        XCTAssertTrue(surface.staysExpandedOnHoverExit, "still one pin outstanding")
+        XCTAssertTrue(coordinator.isUserEngaged)
+
+        second.release()
+        await drainAndPump(coordinator)
+        XCTAssertFalse(surface.staysExpandedOnHoverExit, "last release lifts the pin")
+        XCTAssertFalse(coordinator.isUserEngaged)
+    }
+
+    /// When the user has `keepNookOpen` set, releasing the last pin must restore that
+    /// preference — not silently turn it off. The pin overrides the user preference
+    /// upward (always pinned while presenting); release must return control to it.
+    func testPinReleaseRestoresKeepNookOpenPreference() async {
+        let log = ExpandLog()
+        let a = SpyModule(id: "A", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a], surface: surface)
+        coordinator.resetAllSettingsToDefaults()  // baseline keepNookOpen == false
+
+        // `toggleKeepNookOpen` flips the preference AND projects onto the surface;
+        // assigning `appState.keepNookOpen` directly does the persistence half but
+        // does not call into the coordinator's projection, so use the toggle.
+        coordinator.toggleKeepNookOpen()  // false -> true
+        XCTAssertTrue(surface.staysExpandedOnHoverExit, "user preference: keep open")
+
+        let handle = coordinator.presentationPinning.pin()
+        await drainAndPump(coordinator)
+        XCTAssertTrue(surface.staysExpandedOnHoverExit, "still true: pin is additive")
+
+        handle.release()
+        await drainAndPump(coordinator)
+        XCTAssertTrue(
+            surface.staysExpandedOnHoverExit,
+            "release returns to the user's keepNookOpen preference, not a hardcoded false"
+        )
+    }
 }
