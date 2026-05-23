@@ -202,7 +202,10 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         .frame(height: nook.notchSize.height)
         // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` —
         // they cannot change at runtime, so no `.onChange` reconciliation is needed.
-        // The compact widths are reset to 0 on the (hidden) transition path itself.
+        // The `@State` `compactLeadingWidth`/`compactTrailingWidth` retain their last
+        // measured value when the slot views disappear (SwiftUI doesn't fire
+        // `onGeometryChange` for a vanishing view), but the values are only consulted
+        // while the slots are present, so the stale carry-over is benign.
     }
 
     private func expandedContent() -> some View {

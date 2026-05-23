@@ -30,7 +30,7 @@ struct SettingsShortcutRow: View {
                 Text("Show Nook")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.primaryLabel.opacity(0.95))
-                if let failure = appState.hotkeyRegistrationFailures["toggle"] {
+                if let failure = appState.hotkeyRegistrationFailures[NookHotkeyIDs.toggle] {
                     Text(failure.message)
                         .font(.system(size: 9, weight: .regular))
                         .foregroundStyle(Color.orange)
@@ -118,7 +118,7 @@ struct SettingsHotkeyFailureRow: View {
     /// Failures for every shortcut except the show/hide toggle, sorted for stable order.
     private var staticFailures: [HotkeyRegistrationFailure] {
         appState.hotkeyRegistrationFailures
-            .filter { $0.key != "toggle" }
+            .filter { $0.key != NookHotkeyIDs.toggle }
             .values
             .sorted { $0.shortcutName < $1.shortcutName }
     }

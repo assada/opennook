@@ -178,6 +178,13 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// backdrop's `NSVisualEffectView` resolves its material against the *window's*
     /// appearance, so without pinning it here a "Light" theme on a dark-mode Mac would
     /// still paint a dark frosted panel.
+    ///
+    /// **Deliberately not `@Published`** (unlike ``backdrop``). `NSAppearance` is an
+    /// AppKit appearance proxy whose effect is the `NSWindow.appearance` set in
+    /// ``didSet`` — the SwiftUI content tree re-resolves its `colorScheme` from the
+    /// hosting window automatically. There is no SwiftUI observer that would benefit
+    /// from a Combine publish, so adding `@Published` would be theatrical motion
+    /// without behavioural change.
     public var chromeAppearance: NSAppearance? {
         didSet {
             // Pinning the appearance only pokes the live window — no rebuild — so unlike
@@ -551,17 +558,21 @@ extension Nook {
             try? await Task.sleep(for: openSettleDuration)
             // A screen-parameter change during the settle could have rebuilt the
             // window underneath us; bail rather than return success on a defunct view.
-            guard isCurrent(generation) else { return }
+            // `Task.isCancelled` belt-and-suspenders matches `_hide`'s pattern — a
+            // cancellation can only come from a generation-bumping supersession today,
+            // so this is redundant with `isCurrent`, but the two together make the
+            // bail condition robust against any future cancellation path.
+            guard isCurrent(generation), !Task.isCancelled else { return }
         } else {
             if !skipHide {
                 withAnimation(effectiveClosingAnimation) { state = .hidden }
                 try? await Task.sleep(for: intermediateHideDuration)
                 // A newer transition may have superseded us across the sleep.
-                guard isCurrent(generation), state == .hidden else { return }
+                guard isCurrent(generation), !Task.isCancelled, state == .hidden else { return }
             }
             withAnimation(effectiveConversionAnimation) { state = .expanded }
             try? await Task.sleep(for: conversionSettleDuration)
-            guard isCurrent(generation) else { return }
+            guard isCurrent(generation), !Task.isCancelled else { return }
         }
     }
 
@@ -591,16 +602,16 @@ extension Nook {
             withAnimation(effectiveOpeningAnimation) { state = .compact }
             showWindow()
             try? await Task.sleep(for: openSettleDuration)
-            guard isCurrent(generation) else { return }
+            guard isCurrent(generation), !Task.isCancelled else { return }
         } else {
             if !skipHide {
                 withAnimation(effectiveClosingAnimation) { state = .hidden }
                 try? await Task.sleep(for: intermediateHideDuration)
-                guard isCurrent(generation), state == .hidden else { return }
+                guard isCurrent(generation), !Task.isCancelled, state == .hidden else { return }
             }
             withAnimation(effectiveConversionAnimation) { state = .compact }
             try? await Task.sleep(for: conversionSettleDuration)
-            guard isCurrent(generation) else { return }
+            guard isCurrent(generation), !Task.isCancelled else { return }
         }
     }
 

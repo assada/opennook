@@ -10,6 +10,16 @@ import AppKit
 
 /// Borderless, screen-saver-level panel that hosts the nook chrome above all spaces.
 final class NookPanel: NSPanel {
+    /// Window-level offset above `.statusBar` for the nook chrome.
+    ///
+    /// `.screenSaver` (the next named level above `.statusBar`) is silently
+    /// undeliverable for system drag sessions, so we stay below it. The exact magnitude
+    /// is not load-bearing — any value strictly between `.statusBar` (25) and
+    /// `.screenSaver` (1000) works the same — but `+8` mirrors AppKit's own spacing
+    /// between adjacent named window levels and leaves headroom for a host to layer
+    /// transient surfaces above the chrome without rewriting this offset.
+    static let levelOffsetAboveStatusBar: Int = 8
+
     override init(
         contentRect: NSRect,
         styleMask style: NSWindow.StyleMask,
@@ -24,10 +34,9 @@ final class NookPanel: NSPanel {
         )
         self.hasShadow = false
         self.backgroundColor = .clear
-        // `.statusBar + 8` keeps the chrome above ordinary windows (and the menu bar
-        // itself) without going so high that AppKit skips us for drag-and-drop
-        // delivery — `.screenSaver` is silently undeliverable for system drag sessions.
-        self.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 8)
+        self.level = NSWindow.Level(
+            rawValue: NSWindow.Level.statusBar.rawValue + Self.levelOffsetAboveStatusBar
+        )
         // `.canJoinAllSpaces` + `.stationary` keep the chrome pinned across Spaces;
         // `.fullScreenAuxiliary` lets it stay visible when another app goes fullscreen
         // (without it the notch UI vanishes the moment any window is fullscreened);
