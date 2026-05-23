@@ -45,6 +45,13 @@ final class SurfaceArbiter {
     /// surface restores to once the stack empties. `nil` while no claim is outstanding.
     private var baseRestoreState: NookState?
 
+    /// Per-token wall-clock watchdog tasks. A granted claim with non-`nil`
+    /// ``NookSurfaceClaim/maxDuration`` mints a task here that sleeps the duration and
+    /// then re-enters ``end(_:)`` to synthetically release the claim. Cancelled (and
+    /// removed) when the claim ends cleanly or is invalidated by a module switch, so
+    /// a well-behaved presenter pays nothing.
+    private var watchdogs: [NookSurfaceToken: Task<Void, Never>] = [:]
+
     private var nextToken = 0
 
     // Every callback is `@MainActor`-isolated: the arbiter is a `@MainActor` type and
@@ -110,10 +117,44 @@ final class SurfaceArbiter {
             nextToken += 1
             stack.append(Entry(token: token, claim: claim))
             liveTokens.insert(token)
+            armWatchdog(for: token, claim: claim)
             await expand()
             granted = token
         }
         return granted
+    }
+
+    /// Starts the wall-clock watchdog for a granted claim — a presenter that never
+    /// calls `endTransientPresentation` (crashed, has a bug, leaked) is the worst case
+    /// this guards against. Cleaning up here keeps the stack bounded and prevents the
+    /// "every subsequent claim is denied because a phantom claim still holds the
+    /// surface" failure mode.
+    private func armWatchdog(for token: NookSurfaceToken, claim: NookSurfaceClaim) {
+        guard let maxDuration = claim.maxDuration else { return }
+        // `[weak self]` keeps the watchdog from extending the arbiter's lifetime; if
+        // the coordinator goes away before the watchdog fires, the auto-release is
+        // moot anyway.
+        let moduleID = claim.moduleID
+        watchdogs[token] = Task { [weak self] in
+            // `Task.sleep` throws on cancellation; the typed-throws fold turns that
+            // into a nil — `end`/`invalidateClaims` cancel the task on a clean exit,
+            // and we silently return.
+            guard (try? await Task.sleep(for: maxDuration)) != nil else { return }
+            guard let self else { return }
+            // Same logging idiom as `AppCoordinator.runWithTimeout`. The
+            // synthetic `end` re-enters the serial chain just like a presenter-driven
+            // end, so it cannot race other transitions.
+            print("[OpenNook] SurfaceArbiter watchdog: claim from '\(moduleID)' " +
+                "exceeded \(maxDuration); auto-releasing")
+            await self.end(token)
+        }
+    }
+
+    /// Cancels a granted claim's watchdog and forgets it. Called from the only two
+    /// paths a token leaves `liveTokens`: a clean `end`, or `invalidateClaims` on a
+    /// module switch.
+    private func cancelWatchdog(for token: NookSurfaceToken) {
+        watchdogs.removeValue(forKey: token)?.cancel()
     }
 
     /// Invalidates every outstanding claim owned by `moduleID` — used when that module
@@ -128,6 +169,7 @@ final class SurfaceArbiter {
         guard !dropped.isEmpty else { return }
         for entry in dropped {
             liveTokens.remove(entry.token)
+            cancelWatchdog(for: entry.token)
         }
         stack.removeAll { $0.claim.moduleID == moduleID }
         if stack.isEmpty {
@@ -145,6 +187,7 @@ final class SurfaceArbiter {
     func end(_ token: NookSurfaceToken) async {
         await runSerial { [self] in
             guard liveTokens.remove(token) != nil else { return }
+            cancelWatchdog(for: token)
             guard let index = stack.firstIndex(where: { $0.token == token }) else { return }
             stack.remove(at: index)
             // A surviving claim still holds the surface — leave it expanded.

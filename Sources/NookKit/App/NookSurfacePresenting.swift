@@ -34,9 +34,34 @@ public struct NookSurfaceClaim: Sendable {
     /// How the claim ranks against a competing one already holding the surface.
     public let priority: NookSurfacePriority
 
-    public init(moduleID: String, priority: NookSurfacePriority = .normal) {
+    /// Maximum wall-clock duration the granted claim may hold the surface before the
+    /// arbiter synthetically releases it (logging a warning).
+    ///
+    /// **Safety net, not flow control.** Default ``defaultMaxDuration`` (30 s) is sized
+    /// so a well-behaved presenter (e.g. ``NookComponents``' `NookActivityQueue`,
+    /// whose per-activity dwell is bounded in seconds) never trips it. The watchdog
+    /// exists so a presenter that crashes mid-presentation (or never calls
+    /// ``NookSurfacePresenting/endTransientPresentation(_:)``) does not accumulate
+    /// surface claims for the entire process lifetime — the stack stays bounded.
+    ///
+    /// Set to `nil` to disable the watchdog for an intentional long-running takeover.
+    /// Set to a smaller value for a presenter that should reliably never hold the
+    /// surface for more than, say, 5 seconds.
+    public let maxDuration: Duration?
+
+    /// Watchdog default — 30 seconds. Long enough that no well-behaved presenter
+    /// hits it, short enough that a stuck claim is cleaned up before the user
+    /// notices accumulated denials of their next claim.
+    public static let defaultMaxDuration: Duration = .seconds(30)
+
+    public init(
+        moduleID: String,
+        priority: NookSurfacePriority = .normal,
+        maxDuration: Duration? = NookSurfaceClaim.defaultMaxDuration
+    ) {
         self.moduleID = moduleID
         self.priority = priority
+        self.maxDuration = maxDuration
     }
 }
 
