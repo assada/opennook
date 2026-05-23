@@ -101,7 +101,8 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(log.entries, [], "compact surface: no synthetic onExpand")
     }
 
-    /// A switch quiesces the outgoing module before flipping identity.
+    /// A switch quiesces the outgoing module. With the reordered switch, the quiesce
+    /// runs off the lifecycle chain — `drainSwitchTailsForTesting()` joins it.
     func testSwitchQuiescesOutgoingModule() async {
         let log = ExpandLog()
         let a = SpyModule(id: "A", expandLog: log)
@@ -111,6 +112,7 @@ final class AppCoordinatorTests: XCTestCase {
 
         coordinator.switchModule(to: "B")
         await coordinator.drainLifecycleForTesting()
+        await coordinator.drainSwitchTailsForTesting()
 
         XCTAssertEqual(a.switchAwayCount, 1, "outgoing module was quiesced")
         XCTAssertEqual(b.switchAwayCount, 0, "incoming module is not quiesced")
@@ -143,7 +145,8 @@ final class AppCoordinatorTests: XCTestCase {
     }
 
     /// Switch transactions serialize on the lifecycle chain: two back-to-back switches
-    /// resolve in order, settling on the last requested module.
+    /// resolve in order, settling on the last requested module. The off-chain quiesce
+    /// drains are joined separately via `drainSwitchTailsForTesting()`.
     func testSwitchesSerializeOnLifecycleChain() async {
         let log = ExpandLog()
         let a = SpyModule(id: "A", expandLog: log)
@@ -152,15 +155,41 @@ final class AppCoordinatorTests: XCTestCase {
         let surface = FakeNookSurface()
         let coordinator = makeCoordinator(modules: [a, b, c], surface: surface)
 
-        // Make A's quiesce slow, so if switches were not serialized the B→C switch
-        // could interleave with the A→B transaction.
         coordinator.switchModule(to: "B")
         coordinator.switchModule(to: "C")
         await coordinator.drainLifecycleForTesting()
+        await coordinator.drainSwitchTailsForTesting()
 
         XCTAssertEqual(coordinator.activeModuleID, "C", "the last switch wins, in order")
         XCTAssertEqual(a.switchAwayCount, 1)
         XCTAssertEqual(b.switchAwayCount, 1, "B was switched away from after A→B settled")
+    }
+
+    /// Regression: a misbehaving outgoing module whose `prepareForSwitchAway` never
+    /// returns must NOT wedge the lifecycle chain. Before the reorder, performSwitch
+    /// awaited the quiesce on-chain and a hang in module code froze every queued
+    /// surface transition behind it.
+    func testSwitchDoesNotWedgeOnHangingPrepareForSwitchAway() async {
+        let log = ExpandLog()
+        // A's quiesce parks forever — simulating a misbehaving module.
+        let a = SpyModule(id: "A", expandLog: log, quiesceWork: {
+            try? await Task.sleep(for: .seconds(60))
+        })
+        let b = SpyModule(id: "B", expandLog: log)
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(modules: [a, b], surface: surface)
+
+        coordinator.switchModule(to: "B")
+        // The lifecycle chain settles immediately even though A's quiesce is parked.
+        await coordinator.drainLifecycleForTesting()
+
+        XCTAssertEqual(
+            coordinator.activeModuleID, "B",
+            "switch identity flips on the serial chain — hanging quiesce drains off-chain"
+        )
+        // Module B's hooks are live; we can drive the surface without waiting for A.
+        let token = await coordinator.beginTransientPresentation(NookSurfaceClaim(moduleID: "B"))
+        XCTAssertNotNil(token, "lifecycle chain unwedged — new claims still flow")
     }
 
     /// `registerGlobalHotkey` records its outcome on the durable failure channel.

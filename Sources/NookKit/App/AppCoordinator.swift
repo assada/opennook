@@ -105,10 +105,40 @@ public final class AppCoordinator: ObservableObject {
     /// opposite state from the user's last action.
     private var lifecycleTail: Task<Void, Never>?
 
+    /// Tail of the *off-chain* switch-quiesce drains. A module switch flips identity
+    /// inside the serial lifecycle chain (fast — no user-visible stall) and runs the
+    /// outgoing module's `prepareForSwitchAway` in a detached follow-on task: the
+    /// arbiter's `invalidateClaims` already makes the outgoing module's surface
+    /// activity stale-token-safe, so the user sees the new module immediately and the
+    /// outgoing module drains under the covers. Two rapid switches enqueue two drains
+    /// here in order so `drainSwitchTailsForTesting()` can join them.
+    private var switchTailTask: Task<Void, Never>?
+
+    /// Bounded budget for an outgoing module's `prepareForSwitchAway`. A misbehaving
+    /// module that never returns is logged and the task is cancelled — the arbiter's
+    /// stale-token guard makes the abandoned drain a no-op on the surface.
+    static let switchAwayTimeout: Duration = .seconds(2)
+
     /// Awaits the current tail of the serial lifecycle chain — every transition and
     /// switch transaction enqueued so far has settled when this returns. Test-only seam.
     func drainLifecycleForTesting() async {
         await lifecycleTail?.value
+    }
+
+    /// Awaits all in-flight detached switch-quiesce drains. Test-only seam — production
+    /// code never reads this because the arbiter already guarantees stale-token safety.
+    func drainSwitchTailsForTesting() async {
+        await switchTailTask?.value
+    }
+
+    /// Chains a switch-quiesce drain after every previously enqueued one so back-to-back
+    /// switches drain in registration order.
+    private func enqueueSwitchTail(_ work: @escaping @Sendable @MainActor () async -> Void) {
+        let previous = switchTailTask
+        switchTailTask = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
     }
 
     /// Chains `operation` after every previously enqueued lifecycle transition so
@@ -299,57 +329,108 @@ public final class AppCoordinator: ObservableObject {
         enqueueLifecycle { [weak self] in await self?.performSwitch(to: id) }
     }
 
-    /// The serialized module-switch transaction. Runs as one critical section on the
-    /// lifecycle chain so every step — quiesce, claim invalidation, identity flip, hook
-    /// re-wire — settles before any queued surface transition or further switch.
+    /// The serialized module-switch transaction. Reordered from quiesce-first to
+    /// invalidate-first so a slow or misbehaving outgoing module cannot wedge the
+    /// lifecycle chain.
+    ///
+    /// On the serial chain — fast, user-facing:
+    ///   1. **Invalidate** outgoing module's arbiter claims (synchronous, in-memory).
+    ///      After this, any `endTransientPresentation` from the outgoing module is a
+    ///      guaranteed no-op — the arbiter's `liveTokens` guard makes the outgoing
+    ///      drain stale-token-safe regardless of when it finishes.
+    ///   2. **Read live surface state** — never the mirror, never a value captured
+    ///      before this transaction reached the head of the queue.
+    ///   3. **Flip identity**: `onDeactivate` / `onActivate`, configuration re-publish.
+    ///   4. **Re-wire surface hooks** so the synthetic `onExpand` below fires the
+    ///      incoming module's hook.
+    ///   5. **Clear stranded `viewMode == .settings`** if the incoming module disables
+    ///      Settings.
+    ///   6. **Fire `onReady`** for the incoming module (once per loaded instance).
+    ///   7. **Synthesize `onExpand`** if the surface was already expanded.
+    ///
+    /// Off the serial chain — bounded, under-the-covers:
+    ///   8. **Drain the outgoing module's `prepareForSwitchAway`** in a detached
+    ///      follow-on (`enqueueSwitchTail`) with a hard timeout. The user sees the new
+    ///      module immediately; the outgoing module's quiesce runs concurrently. A
+    ///      hanging quiesce hits the timeout and is cancelled — the arbiter's
+    ///      stale-token guard keeps that abandoned work harmless.
+    ///
+    /// Before the reorder, step 1 was an unbounded `await` on a module-supplied
+    /// `prepareForSwitchAway` — a misbehaving module wedged the entire lifecycle chain.
     private func performSwitch(to id: String) async {
         let outgoingID = moduleHost.activeModuleID
         guard id != outgoingID, moduleHost.registry.descriptor(for: id) != nil else { return }
+        let outgoingModule = moduleHost.registry.module(for: outgoingID)
 
-        // 1. Quiesce the outgoing module: join any in-flight transient presentation and
-        //    release its surface claim, BEFORE its identity is flipped or it is unloaded.
-        await moduleHost.registry.module(for: outgoingID)?.prepareForSwitchAway()
-
-        // 2. Invalidate the outgoing module's outstanding arbiter claims. Its content is
-        //    leaving the surface, so the claims are dropped and their tokens go stale.
-        //    Synchronous, in-memory — already on the serial chain.
+        // 1. Invalidate outgoing claims FIRST — stale-token safety is now the contract
+        //    the off-chain quiesce drain relies on.
         arbiter.invalidateClaims(ownedBy: outgoingID)
 
-        // 3. Read the LIVE surface state on the serial chain — never the mirror, never a
-        //    value captured before this transaction reached the head of the queue.
+        // 2. Read live surface state on the serial chain.
         let wasExpanded = surface.state == .expanded
 
-        // 4. Flip module identity: onDeactivate / onActivate, configuration re-publish,
-        //    and the outgoing module's unload (which now runs after quiesce was awaited).
+        // 3. Flip identity.
         withAnimation(.easeInOut(duration: 0.22)) {
             _ = moduleHost.switchModule(to: id)
         }
         guard moduleHost.activeModuleID == id else { return }
 
-        // 5. Re-wire the surface hooks synchronously, in this same critical section, so
-        //    the synthetic onExpand below provably fires the *incoming* module's hook.
+        // 4. Re-wire surface hooks in this same critical section.
         applyModuleHooks(moduleHost.configuration)
 
-        // 6. If the incoming module disables Settings (showsSettings == false), drop any
-        //    stranded `.settings` viewMode so the chrome doesn't render a back-chevron
-        //    pointing at a Settings screen that isn't reachable. The expanded view
-        //    already gates on `showsSettings && isSettingsView`, but the top bar's
-        //    leading cluster also reads viewMode and would otherwise misrender.
+        // 5. Drop a stranded `.settings` viewMode if the incoming module disables
+        //    Settings (see testSwitchToModuleWithSettingsDisabledClearsStrandedSettingsViewMode).
         if !moduleHost.configuration.topBar.showsSettings, appState.viewMode == .settings {
             appState.showHome()
         }
 
-        // 7. An unloaded module is rebuilt fresh on return, so its onReady must fire
-        //    again; give the incoming module its once-per-instance onReady.
+        // 6. onReady for the incoming module (once per loaded instance).
         if !moduleHost.registry.isLoaded(outgoingID) {
             modulesGivenOnReady.remove(outgoingID)
         }
         fireModuleReadyIfNeeded()
 
-        // 8. If the surface was expanded, synthesize an onExpand for the incoming module
-        //    so its content sees a consistent lifecycle.
+        // 7. Synthetic onExpand if the surface was already expanded.
         if wasExpanded {
             moduleHost.configuration.onExpand?()
+        }
+
+        // 8. Quiesce drain — off the serial chain, with a hard timeout.
+        if let outgoingModule {
+            enqueueSwitchTail { [weak self] in
+                await Self.runWithTimeout(Self.switchAwayTimeout, label: "prepareForSwitchAway[\(outgoingID)]") {
+                    await outgoingModule.prepareForSwitchAway()
+                }
+                _ = self  // retain coordinator across the drain
+            }
+        }
+    }
+
+    /// Runs `work` under a hard deadline. Past `timeout` the work task is cancelled and
+    /// the timeout is logged via `print` — the coordinator does not fail the switch.
+    ///
+    /// The arbiter's stale-token guard makes an abandoned `prepareForSwitchAway` safe:
+    /// any `endTransientPresentation` it issues against an invalidated claim is a
+    /// no-op on the surface.
+    private static func runWithTimeout(
+        _ timeout: Duration,
+        label: String,
+        _ work: @escaping @Sendable () async -> Void
+    ) async {
+        let workTask = Task(operation: work)
+        let timerTask = Task<Bool, Never> {
+            (try? await Task.sleep(for: timeout)) != nil
+        }
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await workTask.value; return false }
+            group.addTask { await timerTask.value }
+            if let timedOut = await group.next(), timedOut {
+                workTask.cancel()
+                print("[OpenNook] \(label) exceeded \(timeout); cancelled")
+            } else {
+                timerTask.cancel()
+            }
+            group.cancelAll()
         }
     }
 
