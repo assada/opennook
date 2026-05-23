@@ -154,22 +154,38 @@ NookApp.main { MyHomeView() }
 ```
 
 **2. Customize via `NookConfiguration`** when you need more than a home view —
-the compact slots, the chrome theme, the top bar's leading label/icon, and
-lifecycle hooks:
+the compact slots, the chrome theme, the top bar's leading label/icon, the
+chrome flags, lifecycle hooks, and file drops:
 
 ```swift
 var configuration = NookConfiguration()
 configuration.setHome { MyHomeView() }
 configuration.setCompactTrailing { MyGlyph() }
 configuration.theme = { appState in MyPalette.resolve(appState) }
-configuration.topBarLeadingTitle = { _ in "Today" }  // default: "Home"
-configuration.topBarLeadingIcon = nil                // default: "house"
-configuration.onExpand = { print("nook expanded") }
+
+// Top bar — leading cluster identity and chrome flags live on `topBar`.
+configuration.topBar.leadingTitle = { _ in "Today" }  // default: "Home"
+configuration.topBar.leadingIcon = nil                // default: "house"
+configuration.topBar.showsTopBar = true               // false strips top bar + gear + lock
+configuration.topBar.showsSettings = true             // false drops the gear (top bar stays)
+
+// Lifecycle hooks.
+configuration.onExpand    = { print("nook expanded") }
+configuration.onCompact   = { /* fires once at cold-launch boot, then per transition */ }
+configuration.onHide      = { /* nook went hidden */ }
+configuration.onFileDrop  = { urls in /* accept/reject dropped files */ true }
+configuration.onReady     = { coordinator in /* post-launch handle for components */ }
+
 NookApp.main(configuration)
 ```
 
 Your views read the resolved palette from the `\.nookResolvedTheme`
 environment value and shared services from `\.appServices`.
+
+> Cold-launch quirk: `onCompact` fires once at boot when the coordinator
+> performs its initial compact, *before* any user transition. Wire side
+> effects through a "first fire is the launch" guard if you need
+> user-only semantics.
 
 **3. Add your state and services.** `AppState`
 (`Sources/NookKit/App/AppState.swift`) holds chrome state — add product state
@@ -221,6 +237,36 @@ arbiter claims leaking across modules). See `Examples/MultiNook/main.swift`
 for the full pattern — a `NookModule` class with a typed `ServiceKey`-backed
 dependency, three modules with per-module top-bar identity, and the
 closure-registration shortcut for the simpler ones.
+
+## Shipping checklist
+
+The `swift run` paths are for the dev loop. To ship a real signed `.app`
+you need a few extra pieces — most of them tiny, none of them magic.
+
+- **Bundle identity.** Rename the product in three places: `Package.swift`
+  (the `.executable(name:)` and `.library(name:)`), `project.yml`
+  (`name:`, `targets:`, `PRODUCT_BUNDLE_IDENTIFIER`), and `App/Info.plist`
+  (`CFBundleIdentifier`, `CFBundleName`). The reverse-DNS id you pick is
+  used by `NookModuleContext.makeDefault` to name on-disk containers and
+  per-module `UserDefaults` suites, so pick before you ship.
+- **Persistence suites.** `NookKit` writes its own preferences into
+  `UserDefaults.standard` under the `nook.*` prefix; `NookComponents.Shelf`
+  writes `nook.shelf.items`. If you're using `NookHostConfiguration`, each
+  module gets its own `UserDefaults` suite via `NookModuleContext`. Don't
+  collide host product state with `nook.*` keys.
+- **Entitlements.** The minimum that lets every framework feature work
+  inside the App Sandbox: `com.apple.security.app-sandbox`,
+  `com.apple.security.files.user-selected.read-write` (shelf drag-in),
+  `com.apple.security.files.bookmarks.app-scope` (scoped-bookmark persistence).
+  The global hotkey is Carbon and needs no entitlement. CoreAudio
+  default-output listening is read-only and needs no entitlement. The
+  shelf detects the sandbox at runtime (`ShelfRuntime.isSandboxed`) and
+  switches to a stricter acceptance mode.
+- **Menu-bar accessory, no Dock.** Set `LSUIElement = true` in
+  `Info.plist` if you want the menu-bar-only behavior the demo ships.
+- **Hardened runtime + notarization** for distribution outside the Mac
+  App Store. Sign with a Developer ID, enable hardened runtime, notarize.
+  None of OpenNook's APIs require runtime exceptions.
 
 ## Licensing
 
