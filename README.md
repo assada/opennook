@@ -1,5 +1,13 @@
 # OpenNook
 
+[![CI](https://github.com/glendonchin/opennook/actions/workflows/ci.yml/badge.svg)](https://github.com/glendonchin/opennook/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License: MIT (NookSurface)](https://img.shields.io/badge/NookSurface-MIT-blue.svg)](LICENSE-MIT-NOOKSURFACE)
+[![Swift 5.9+](https://img.shields.io/badge/swift-5.9%2B-orange.svg)](https://swift.org)
+[![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#requirements)
+[![Swift Package Index](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fglendonchin%2Fopennook%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/glendonchin/opennook)
+[![Swift Package Index](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fglendonchin%2Fopennook%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/glendonchin/opennook)
+
 **An open-source framework for building macOS notch apps.**
 
 OpenNook gives you the hard part for free: a polished window that lives in the
@@ -222,6 +230,14 @@ host.register(
 
 host.defaultModule = CounterModule.moduleDescriptor.id
 host.moduleCycleHotkey = NookHotkey(keyCode: 50, carbonModifiers: 4096 | 2048, keySymbol: "`")
+
+// Host-product identity — the framework chrome (About card, show/hide hotkey
+// label, menu-bar fallback) reads `hostName` and `hostTagline` from here.
+// Defaults reproduce the demo strings exactly.
+host.branding = NookHostBranding(
+    hostName: "ContextNook",
+    hostTagline: "Three modules, one notch."
+)
 
 NookApp.main(host)
 ```

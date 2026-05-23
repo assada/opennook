@@ -105,16 +105,25 @@ struct SettingsDataCommandRow: View {
     }
 }
 
-/// About card surfaced in the About settings group: app name, version, and a one-line
-/// note that the app is built on OpenNook.
+/// About card surfaced in the About settings group: host name, version, and a one-line
+/// note about the host. Name and tagline come from `\.nookHostBranding` so downstream
+/// hosts read their own product name — the demo's `"Nook"` / stock tagline are the
+/// defaults.
 struct SettingsAboutCard: View {
     @Environment(\.nookResolvedTheme) private var theme
+    @Environment(\.nookHostBranding) private var branding
 
     /// Reads `CFBundleShortVersionString` from the running bundle. The SPM `swift run`
     /// build has no `Info.plist` on disk, so it falls back to the package version.
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
     }
+
+    /// Default tagline used when the host has not overridden ``NookHostBranding/hostTagline``.
+    /// References OpenNook as the framework, not the host product — the host's
+    /// own marketing copy belongs in a `hostTagline` override.
+    private static let defaultTagline =
+        "A demo notch app built with OpenNook, an open-source framework for macOS notch apps."
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -125,14 +134,14 @@ struct SettingsAboutCard: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text("Nook")
+                    Text(branding.hostName)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(theme.primaryLabel.opacity(0.95))
                     Text("v\(version)")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(theme.tertiaryLabel)
                 }
-                Text("A demo notch app built with OpenNook, an open-source framework for macOS notch apps.")
+                Text(branding.hostTagline ?? Self.defaultTagline)
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(theme.secondaryLabel)
                     .fixedSize(horizontal: false, vertical: true)

@@ -16,6 +16,7 @@ struct SettingsShortcutRow: View {
     @ObservedObject var appState: AppState
 
     @Environment(\.nookResolvedTheme) private var theme
+    @Environment(\.nookHostBranding) private var branding
     @State private var isRecording = false
     @State private var eventMonitor: Any?
 
@@ -27,7 +28,7 @@ struct SettingsShortcutRow: View {
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Show Nook")
+                Text("Show \(branding.hostName)")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(theme.primaryLabel.opacity(0.95))
                 if let failure = appState.hotkeyRegistrationFailures[NookHotkeyIDs.toggle] {
@@ -64,7 +65,7 @@ struct SettingsShortcutRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Show Nook shortcut, currently \(appState.hotkey.displaySymbols.joined(separator: " "))")
+        .accessibilityLabel("Show \(branding.hostName) shortcut, currently \(appState.hotkey.displaySymbols.joined(separator: " "))")
         .accessibilityHint("Activates to record a new shortcut")
         .onDisappear { stopRecording() }
     }

@@ -108,12 +108,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installMenuBarFallback() {
+        let hostName = moduleHost.branding.hostName
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "text.bubble", accessibilityDescription: "Nook")
+        item.button?.image = NSImage(systemSymbolName: "text.bubble", accessibilityDescription: hostName)
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(
-            title: "Show Nook",
+            title: "Show \(hostName)",
             action: #selector(showNook),
             keyEquivalent: ";"
         ))

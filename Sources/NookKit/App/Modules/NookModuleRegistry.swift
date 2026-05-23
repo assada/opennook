@@ -36,13 +36,25 @@ public final class NookModuleRegistry {
     /// not configure one.
     public let cycleHotkey: NookHotkey?
 
+    /// Host-level product identity surfaced through the framework chrome (About card,
+    /// show/hide hotkey label, menu-bar fallback). The registry holds it so
+    /// ``ModuleHost`` can republish it without holding a reference back to the host
+    /// configuration value.
+    public let branding: NookHostBranding
+
     private var instances: [String: NookModule] = [:]
     private var contexts: [String: NookModuleContext] = [:]
 
-    init(registrations: [Registration], defaultModuleID: String, cycleHotkey: NookHotkey?) {
+    init(
+        registrations: [Registration],
+        defaultModuleID: String,
+        cycleHotkey: NookHotkey?,
+        branding: NookHostBranding = .default
+    ) {
         self.registrations = registrations
         self.defaultModuleID = defaultModuleID
         self.cycleHotkey = cycleHotkey
+        self.branding = branding
     }
 
     /// All registered modules' descriptors, in registration order — the switcher's list.

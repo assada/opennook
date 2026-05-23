@@ -49,6 +49,11 @@ struct ModuleRouterExpandedView: View {
         // The switcher reads `\.nookResolvedTheme`; NookExpandedView re-sets it for its
         // own subtree, so this only reaches the switcher bar.
         .environment(\.nookResolvedTheme, configuration.theme(appState))
+        // Host-product identity (About card, show-hide hotkey label) lives on
+        // `ModuleHost`; surface it here so any nested chrome view can read it without
+        // an init-time plumb. Applied at the router so it covers both the switcher and
+        // the expanded surface.
+        .environment(\.nookHostBranding, moduleHost.branding)
     }
 }
 

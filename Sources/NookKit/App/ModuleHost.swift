@@ -72,6 +72,10 @@ public final class ModuleHost: ObservableObject {
     /// Optional global shortcut that cycles modules, as configured by the host.
     public var cycleHotkey: NookHotkey? { registry.cycleHotkey }
 
+    /// Host-product identity surfaced through the framework chrome (the About card,
+    /// the show/hide hotkey label, the menu-bar fallback). See ``NookHostBranding``.
+    public var branding: NookHostBranding { registry.branding }
+
     /// Modules that want the user's attention while in the background — the switcher
     /// badges these. A backgrounded module (or a component running on its behalf) calls
     /// ``requestAttention(for:)``; switching to a module clears its badge.

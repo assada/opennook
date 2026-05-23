@@ -198,4 +198,33 @@ final class ModuleHostTests: XCTestCase {
         let multi = makeHost([StubModule(id: "A"), StubModule(id: "B")])
         XCTAssertTrue(multi.isMultiModule)
     }
+
+    // MARK: - Branding
+
+    /// An unconfigured host (the single-module convenience init) gets
+    /// ``NookHostBranding/default`` so the demo strings render unchanged.
+    func testSingleConfigurationInitGetsDefaultBranding() {
+        let host = ModuleHost(configuration: NookConfiguration())
+        XCTAssertEqual(host.branding, .default)
+        XCTAssertEqual(host.branding.hostName, "Nook")
+        XCTAssertNil(host.branding.hostTagline)
+    }
+
+    /// Custom branding set on `NookHostConfiguration` flows through the registry to
+    /// `ModuleHost.branding`, where the chrome (About card, hotkey label,
+    /// menu-bar fallback) reads it.
+    func testCustomBrandingPropagatesFromHostConfigurationToModuleHost() {
+        var config = NookHostConfiguration()
+        config.register(NookModuleDescriptor(id: "A", displayName: "A")) { _ in
+            StubModule(id: "A")
+        }
+        config.branding = NookHostBranding(
+            hostName: "ContextNook",
+            hostTagline: "Custom tagline."
+        )
+
+        let host = ModuleHost(registry: config.makeRegistry())
+        XCTAssertEqual(host.branding.hostName, "ContextNook")
+        XCTAssertEqual(host.branding.hostTagline, "Custom tagline.")
+    }
 }

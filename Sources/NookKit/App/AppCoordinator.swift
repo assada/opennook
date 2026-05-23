@@ -570,7 +570,7 @@ public final class AppCoordinator: ObservableObject {
         recordHotkeyOutcome(
             id: Self.toggleHotkeyID,
             status: status,
-            shortcutName: "Show Nook",
+            shortcutName: "Show \(moduleHost.branding.hostName)",
             hotkey: hotkey
         )
     }

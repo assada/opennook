@@ -33,6 +33,11 @@ public struct NookHostConfiguration: Sendable {
     /// default — means cycling is reachable only through the switcher.
     public var moduleCycleHotkey: NookHotkey?
 
+    /// Host-product identity surfaced through the framework chrome — the About card,
+    /// the show/hide hotkey label, the menu-bar fallback. Defaults to ``NookHostBranding/default``
+    /// (`"Nook"` / nil) so an unconfigured host renders the demo strings.
+    public var branding: NookHostBranding = .default
+
     public init() {}
 
     /// Registers a module by descriptor and factory. The factory receives the module's
@@ -107,7 +112,8 @@ public struct NookHostConfiguration: Sendable {
         return NookModuleRegistry(
             registrations: entries,
             defaultModuleID: defaultID,
-            cycleHotkey: moduleCycleHotkey
+            cycleHotkey: moduleCycleHotkey,
+            branding: branding
         )
     }
 }
