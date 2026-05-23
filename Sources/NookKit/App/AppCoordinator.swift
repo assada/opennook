@@ -504,7 +504,7 @@ public final class AppCoordinator: ObservableObject {
                     // screen via `screenProvider`.
                     if self.surface.state == .expanded {
                         await self.surface.expand(on: screen)
-                    } else if self.surface.windowController != nil {
+                    } else if self.surface.hasLiveWindow {
                         await self.surface.compact(on: screen)
                     }
                 }

@@ -58,7 +58,11 @@ final class FakeNookSurface: NookSurfaceDriving {
     var chromeAppearance: NSAppearance?
     var backdrop: NookBackdrop = .solidBlack
     var transitionConfiguration = NookTransitionConfiguration()
-    var windowController: NSWindowController?
+
+    /// Mirrors the real surface's `hasLiveWindow` — tests flip this to drive the
+    /// coordinator's display-change-while-visible branch without mounting a real
+    /// window.
+    var hasLiveWindow: Bool = false
 
     /// Records every `playFeedback` request.
     private(set) var feedbackCount = 0
