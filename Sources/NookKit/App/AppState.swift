@@ -124,6 +124,18 @@ public final class AppState: ObservableObject {
     /// panel — kept as a hook-point for downstream consumers that want drop targets.
     @Published public var isDragInFlight: Bool = false
 
+    /// Optional secondary label rendered in the top bar after the leading title
+    /// (`[icon] Module  ›  Breadcrumb`). Modules use this to surface the current
+    /// drill-down context — a selected deck, an open document, a chosen profile
+    /// — so the chrome reflects what the user is actually looking at, instead of
+    /// the module's static name. Set to `nil` to clear.
+    ///
+    /// The chrome treats this as a soft state hint: it doesn't affect ``viewMode``
+    /// or the back-to-home affordance. A module that wants the breadcrumb to be
+    /// clickable (e.g. "click to pop back one level") owns that interaction
+    /// inside its own surface — the chrome only renders the text.
+    @Published public var moduleBreadcrumb: String?
+
     /// Loads the persisted appearance, hotkey, and display preferences from
     /// `UserDefaults`. Any missing or unreadable entry falls back to its `.default`.
     public init() {

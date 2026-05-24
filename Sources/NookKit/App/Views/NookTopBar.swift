@@ -43,6 +43,20 @@ struct NookTopBar: View {
                 Text("Settings")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(resolvedTheme.secondaryLabel)
+            } else if let breadcrumb = appState.moduleBreadcrumb, !breadcrumb.isEmpty {
+                // Module-driven drill-down label (a selected deck, an open
+                // document …). Renders with the same separator and typography
+                // weight as Settings so the chrome stays visually consistent.
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(resolvedTheme.quaternaryLabel)
+
+                Text(breadcrumb)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(resolvedTheme.secondaryLabel)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity.combined(with: .offset(x: -4)))
             }
 
             Spacer(minLength: 0)
@@ -77,14 +91,17 @@ struct NookTopBar: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(height: 24)
+        .animation(.easeOut(duration: 0.18), value: appState.moduleBreadcrumb)
     }
 
-    /// On home the configured title stays visible next to its icon; in settings (and any
-    /// other future deep view) the label collapses until the user hovers the glyph, which
-    /// doubles as the back-to-home control. Label and icon come from `NookConfiguration`;
-    /// the defaults reproduce the demo's house + "Home".
+    /// On home the configured title stays visible next to its icon; in settings —
+    /// or when a module has pushed a `moduleBreadcrumb` (a drilled-in product
+    /// sub-context) — the label collapses until the user hovers the glyph, which
+    /// doubles as the back control. Clicking it exits Settings or clears the
+    /// breadcrumb; the module observes that clear and pops its own sub-state.
     private var homeLeadingCluster: some View {
-        let showPersistentHomeTitle = appState.isHomeView && !appState.isSettingsView
+        let hasBreadcrumb = (appState.moduleBreadcrumb?.isEmpty == false)
+        let showPersistentHomeTitle = appState.isHomeView && !appState.isSettingsView && !hasBreadcrumb
         let title = leadingTitle(appState)
 
         return HStack(spacing: 6) {
@@ -97,8 +114,9 @@ struct NookTopBar: View {
                     .foregroundStyle(resolvedTheme.secondaryLabel)
                     .lineLimit(1)
             } else {
-                // Settings (or any deep view): the cluster is the back-to-home control.
-                // With no configured icon, a back chevron keeps that affordance.
+                // Deep view (Settings or a module breadcrumb): the cluster is
+                // the back control. With no configured icon, a back chevron
+                // keeps that affordance.
                 HeaderIcon(
                     systemName: leadingIcon ?? "chevron.left",
                     isActive: false,
@@ -106,7 +124,16 @@ struct NookTopBar: View {
                     help: title
                 ) {
                     withAnimation(.spring(response: 0.34, dampingFraction: 0.85)) {
-                        appState.showHome()
+                        if appState.isSettingsView {
+                            appState.showHome()
+                        } else if hasBreadcrumb {
+                            // Module sub-context: clear the breadcrumb and let
+                            // the module react to that (by exiting its own
+                            // drilled-in state).
+                            appState.moduleBreadcrumb = nil
+                        } else {
+                            appState.showHome()
+                        }
                     }
                 }
                 .accessibilityLabel(title)
