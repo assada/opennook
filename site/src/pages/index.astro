@@ -141,6 +141,19 @@ const carouselLines = [
         </div>
       </div>
 
+      <aside class="mobile-notice" data-mobile-notice hidden>
+        <p class="mobile-notice__text">
+          This interactive demo is built for Mac notch surfaces.
+          Tap the notch to preview it here, or open on a Mac for the full experience.
+        </p>
+        <button type="button" class="mobile-notice__dismiss" data-mobile-notice-dismiss aria-label="Dismiss notice">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </aside>
+
       <section class="screen-hero" aria-label="OpenNook overview">
         <h1 class="screen-hero__title">Notch apps<br />for macOS.</h1>
         <p class="screen-hero__subtitle">
@@ -182,6 +195,8 @@ const carouselLines = [
       const layoutHint = document.querySelector('[data-layout-hint]');
       const carousel = document.querySelector('[data-notch-carousel]');
       const carouselLines = carousel?.querySelectorAll('[data-carousel-line]');
+      const mobileNotice = document.querySelector('[data-mobile-notice]');
+      const mobileNoticeDismiss = document.querySelector('[data-mobile-notice-dismiss]');
 
       const layoutHints = {
         auto: 'Auto uses the notch shape on a notched display and a floating panel on any other.',
@@ -351,25 +366,64 @@ const carouselLines = [
       }
 
       if (nookHost && nookTrigger) {
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const noHover = window.matchMedia('(hover: none)').matches;
         let collapseTimer = 0;
+
+        const isExpanded = () =>
+          nookHost.classList.contains('is-expanded') || nookHost.classList.contains('is-pinned');
 
         const expand = () => {
           window.clearTimeout(collapseTimer);
           nookHost.classList.add('is-expanded');
+          nookTrigger.setAttribute('aria-expanded', 'true');
+        };
+
+        const collapse = () => {
+          if (nookHost.classList.contains('is-pinned')) return;
+          window.clearTimeout(collapseTimer);
+          nookHost.classList.remove('is-expanded');
+          nookTrigger.setAttribute('aria-expanded', 'false');
+          showHomeView();
         };
 
         const scheduleCollapse = () => {
           if (nookHost.classList.contains('is-pinned')) return;
           window.clearTimeout(collapseTimer);
-          collapseTimer = window.setTimeout(() => {
-            nookHost.classList.remove('is-expanded');
-          }, 120);
+          collapseTimer = window.setTimeout(collapse, 120);
         };
 
-        if (reducedMotion || noHover) {
-          nookHost.classList.add('is-open');
+        if (noHover) {
+          nookHost.classList.add('is-touch');
+          nookTrigger.setAttribute('aria-expanded', 'false');
+          nookTrigger.setAttribute('aria-label', 'OpenNook demo - tap to expand');
+
+          const firstCarouselLine = carousel?.querySelector('[data-carousel-line]');
+          if (firstCarouselLine) firstCarouselLine.textContent = 'Tap to expand';
+
+          if (mobileNotice && sessionStorage.getItem('opennook-mobile-notice-dismissed') !== '1') {
+            mobileNotice.hidden = false;
+            mobileNotice.classList.add('is-visible');
+          }
+
+          mobileNoticeDismiss?.addEventListener('click', () => {
+            mobileNotice.hidden = true;
+            mobileNotice.classList.remove('is-visible');
+            sessionStorage.setItem('opennook-mobile-notice-dismissed', '1');
+          });
+
+          nookTrigger.addEventListener('click', (event) => {
+            if (isExpanded()) return;
+            if (event.target.closest('[data-keep-open], [data-settings-toggle], [data-home-btn], [data-setting-value]')) {
+              return;
+            }
+            expand();
+          });
+
+          document.addEventListener('click', (event) => {
+            if (!isExpanded()) return;
+            if (nookHost.contains(event.target)) return;
+            collapse();
+          });
         } else {
           nookTrigger.addEventListener('mouseenter', expand);
           nookTrigger.addEventListener('mouseleave', (event) => {
@@ -407,7 +461,7 @@ const carouselLines = [
         --notch-line-strong: rgba(240, 238, 230, 0.14);
 
         --stage-w: min(520px, calc(100vw - 24px));
-        --stage-h: min(340px, 55dvh);
+        --stage-h: min(340px, max(280px, 55dvh));
         --accent: #0a84ff;
         --notch-pill-w: clamp(150px, 22vw, 200px);
         --notch-pill-h: clamp(26px, 3vw, 30px);
@@ -507,6 +561,9 @@ const carouselLines = [
         min-height: 100dvh;
         display: block;
         isolation: isolate;
+        padding-left: max(0px, env(safe-area-inset-left));
+        padding-right: max(0px, env(safe-area-inset-right));
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
       }
 
       .page::before {
@@ -576,6 +633,55 @@ const carouselLines = [
 
       .nook-host[data-layout-form='floating'] .nook-trigger {
         margin-top: var(--menubar-gap);
+      }
+
+      /* ---- Mobile / touch notice ---- */
+      .mobile-notice {
+        position: relative;
+        z-index: 2;
+        display: none;
+        align-items: flex-start;
+        gap: 10px;
+        width: min(520px, calc(100vw - 24px));
+        margin: 12px auto 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(10, 10, 10, 0.1);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.55);
+        backdrop-filter: blur(8px);
+      }
+
+      .mobile-notice.is-visible {
+        display: flex;
+      }
+
+      html[data-palette='dark'] .mobile-notice {
+        border-color: rgba(240, 238, 230, 0.12);
+        background: rgba(10, 10, 10, 0.35);
+      }
+
+      .mobile-notice__text {
+        flex: 1;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--ink-muted);
+      }
+
+      .mobile-notice__dismiss {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        margin: -4px -4px -4px 0;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--ink-faint);
+        cursor: pointer;
       }
 
       /* ---- SCREEN COPY (cream page, visible when compact) ---- */
@@ -1009,16 +1115,19 @@ const carouselLines = [
         display: flex;
         align-items: center;
         justify-content: center;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: clamp(8px, 2dvh, 16px) 0;
       }
 
       .placeholder-home {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 10px;
+        gap: clamp(6px, 1.5dvh, 10px);
         width: 100%;
-        padding: 40px 12px;
+        padding: clamp(12px, 4dvh, 32px) 12px;
         text-align: center;
       }
 
@@ -1352,7 +1461,9 @@ const carouselLines = [
         .page:has(.nook-host.is-interactive:not(.is-expanded):not(.is-open)) .screen-hero {
           opacity: 1;
         }
+        .nook-host.is-interactive.is-expanded .nook-trigger,
         .nook-host.is-interactive.is-open .nook-trigger,
+        .nook-host.is-interactive.is-expanded .stage,
         .nook-host.is-interactive.is-open .stage {
           width: var(--stage-w);
           height: var(--stage-h);
@@ -1364,19 +1475,58 @@ const carouselLines = [
       @media (max-width: 520px) {
         :root {
           --notch-carousel-w: min(100%, calc(100vw - 24px));
+          --stage-h: min(340px, max(260px, 62dvh));
+        }
+        .mobile-notice {
+          width: min(100%, calc(100vw - 24px));
         }
         .screen-hero__subtitle { max-width: none; }
         .notch-carousel__line {
           white-space: normal;
           font-size: 10.5px;
         }
+        .placeholder-home {
+          padding: 12px 12px 16px;
+        }
+        .placeholder-home__icon {
+          width: 22px;
+          height: 22px;
+        }
+        .hero-btn {
+          min-height: 44px;
+          padding: 10px 16px;
+        }
+      }
+
+      /* ---- Touch surfaces ---- */
+      @media (hover: none) {
+        .bar__back,
+        .bar__icon {
+          width: 44px;
+          height: 44px;
+        }
+
+        .bar {
+          height: 44px;
+        }
       }
 
       /* ---- Landscape phones / short viewports ----
          When the viewport is shorter than the stage's min-height would
-         normally allow, --stage-h already clamps to 84dvh. Hide the
+         normally allow, --stage-h already clamps with a floor. Hide the
          fixed version strip so it doesn't crowd the stage's bottom edge. */
       @media (max-height: 480px) {
+        :root {
+          --stage-h: min(340px, max(240px, 72dvh));
+        }
+        .placeholder-home {
+          padding: 10px 12px 14px;
+          gap: 6px;
+        }
+        .placeholder-home__body {
+          font-size: 10.5px;
+          line-height: 1.4;
+        }
         .version { display: none; }
       }
     </style>
