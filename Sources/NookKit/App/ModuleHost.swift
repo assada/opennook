@@ -43,9 +43,11 @@ public final class ModuleHost: ObservableObject {
     /// the existing `NookApp.main(_:)` entry points stay a special case of the host.
     public convenience init(configuration: NookConfiguration) {
         var host = NookHostConfiguration()
-        // Forward the single-module path's host-global chrome behavior onto the host
-        // that actually owns it (matches `NookApp.main(_ configuration:)`).
+        // Forward the single-module path's host-global concerns onto the host that
+        // actually owns them (matches `NookApp.main(_ configuration:)`).
         host.chromeBehavior = configuration.chromeBehavior
+        host.branding = configuration.branding
+        host.showsMenuBarExtra = configuration.showsMenuBarExtra
         host.register(
             NookModuleDescriptor(id: ModuleHost.singleModuleID, displayName: "Nook")
         ) { configuration }
@@ -82,6 +84,10 @@ public final class ModuleHost: ObservableObject {
     /// Process-global chrome behavior — hover side-effects, the cold-launch shimmer, and
     /// the appearance→backdrop mapping. See ``NookChromeBehavior``.
     public var chromeBehavior: NookChromeBehavior { registry.chromeBehavior }
+
+    /// Whether the framework installs its menu-bar status item. See
+    /// ``NookHostConfiguration/showsMenuBarExtra``.
+    public var showsMenuBarExtra: Bool { registry.showsMenuBarExtra }
 
     /// Modules that want the user's attention while in the background — the switcher
     /// badges these. A backgrounded module (or a component running on its behalf) calls

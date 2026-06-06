@@ -6,6 +6,7 @@
 // A copy is included at /LICENSE in the repository root.
 
 import AppKit
+import Combine
 import SwiftUI
 
 // Re-exported so a host app needs only `import NookApp` to reach the registration API
@@ -42,11 +43,13 @@ public enum NookApp {
     /// one module and no switcher.
     public static func main(_ configuration: NookConfiguration = NookConfiguration()) {
         var host = NookHostConfiguration()
-        // Forward the single-module path's launch seed and chrome behavior onto the host
-        // that actually owns these process-global concerns (appearance / hotkey / display
-        // defaults, and hover / launch shimmer / backdrop).
+        // Forward the single-module path's process-global concerns onto the host that
+        // actually owns them: launch seed (appearance / hotkey / display), chrome
+        // behavior (hover / shimmer / backdrop), host branding, and the menu-bar flag.
         host.preferenceDefaults = configuration.preferenceDefaults
         host.chromeBehavior = configuration.chromeBehavior
+        host.branding = configuration.branding
+        host.showsMenuBarExtra = configuration.showsMenuBarExtra
         host.register(
             NookModuleDescriptor(id: ModuleHost.singleModuleID, displayName: "Nook")
         ) { configuration }
@@ -95,6 +98,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private let coordinator: AppCoordinator
     private let moduleHost: ModuleHost
     private var statusItem: NSStatusItem?
+    private var cancellables = Set<AnyCancellable>()
 
     init(host: NookHostConfiguration) {
         let moduleHost = ModuleHost(registry: host.makeRegistry())
@@ -119,11 +123,31 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installMenuBarFallback() {
+        // Host opt-out: a host that owns its own menu-bar presence (or wants none) can
+        // suppress the framework status item entirely.
+        guard moduleHost.showsMenuBarExtra else { return }
+
         let hostName = moduleHost.branding.hostName
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image =
-            NookMarkView.makeTemplateImage(size: 14)
+            moduleHost.branding.menuBarTemplateImage(size: 14)
             ?? NSImage(systemSymbolName: "text.bubble", accessibilityDescription: hostName)
+        statusItem = item
+        rebuildMenu()
+
+        // The "Settings…" item tracks the active module's `showsSettings`, which can
+        // differ across modules — so rebuild the menu whenever the active module changes
+        // instead of freezing the launch module's chrome into the menu bar.
+        moduleHost.$activeModuleID
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildMenu() }
+            .store(in: &cancellables)
+    }
+
+    private func rebuildMenu() {
+        guard let statusItem else { return }
+        let hostName = moduleHost.branding.hostName
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(
@@ -131,9 +155,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(showNook),
             keyEquivalent: ";"
         ))
-        // "Settings…" tracks the chrome: dropped when the host disabled Settings, since
-        // there is no Settings UI to open. "Toggle Stay Expanded" is kept regardless —
-        // it's chrome-independent and is the only keep-open control left once the top
+        // "Settings…" tracks the chrome: dropped when the active module disabled Settings,
+        // since there is no Settings UI to open. "Toggle Stay Expanded" is kept regardless
+        // — it's chrome-independent and is the only keep-open control left once the top
         // bar (and its lock) is hidden.
         if moduleHost.configuration.topBar.showsSettings {
             menu.addItem(NSMenuItem(
@@ -155,8 +179,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
 
         menu.items.forEach { $0.target = self }
-        item.menu = menu
-        statusItem = item
+        statusItem.menu = menu
     }
 
     @objc private func showNook() {

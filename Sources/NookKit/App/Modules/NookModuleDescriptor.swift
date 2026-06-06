@@ -27,7 +27,9 @@ public struct NookModuleDescriptor: Identifiable, Sendable {
     /// Human-readable name shown in the module switcher.
     public var displayName: String
 
-    /// SF Symbol shown for this module in the switcher and the top-bar cluster.
+    /// SF Symbol shown for this module in the module switcher. (The top-bar leading
+    /// cluster is driven separately by ``NookTopBarConfiguration/leadingIcon`` and the
+    /// host brand mark — not by this descriptor.)
     public var icon: String
 
     /// Accent used to tint the module's switcher entry.

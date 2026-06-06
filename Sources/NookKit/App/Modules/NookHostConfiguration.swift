@@ -50,6 +50,11 @@ public struct NookHostConfiguration: Sendable {
     /// (today's framework behavior). See ``NookChromeBehavior``.
     public var chromeBehavior: NookChromeBehavior = .default
 
+    /// Whether the framework installs its menu-bar status item ("Show …" / Settings /
+    /// Quit). Defaults to `true`. Set to `false` for a host with its own menu-bar
+    /// presence or none.
+    public var showsMenuBarExtra: Bool = true
+
     /// Builds an empty host. Register at least one module via ``register(_:factory:)``
     /// or ``register(_:configuration:)`` before passing to `NookApp.main(_:)`.
     public init() {}
@@ -129,6 +134,7 @@ public struct NookHostConfiguration: Sendable {
             cycleHotkey: moduleCycleHotkey,
             branding: branding,
             chromeBehavior: chromeBehavior,
+            showsMenuBarExtra: showsMenuBarExtra,
             presentationPinning: NookPresentationPinning()
         )
     }

@@ -98,6 +98,19 @@ public struct NookConfiguration: Sendable {
     /// to ``NookChromeMotion/default`` (today's springs). See ``NookChromeMotion``.
     public var motion: NookChromeMotion = .default
 
+    /// Host-product identity surfaced through the chrome — name, tagline, and brand mark
+    /// (About card, show/hide hotkey label, menu-bar fallback, top-bar leading mark). On
+    /// the single-module path this is forwarded onto the synthesized
+    /// ``NookHostConfiguration/branding``; multi-module hosts set it on
+    /// ``NookHostConfiguration`` directly. Defaults to ``NookHostBranding/default``.
+    public var branding: NookHostBranding = .default
+
+    /// Whether the framework installs its menu-bar status item (the "Show …" / Settings /
+    /// Quit fallback). Defaults to `true`. Set to `false` for a host that owns its own
+    /// menu-bar presence or wants none. On the single-module path this is forwarded onto
+    /// ``NookHostConfiguration/showsMenuBarExtra``.
+    public var showsMenuBarExtra: Bool = true
+
     /// Overrides the chrome's corner radii — the small rounding into the notch arch and
     /// the larger rounding where the panel meets the wallpaper. `nil` (the default) uses
     /// the framework's radii, tuned to sit well under the menu bar on notched MacBooks.
@@ -247,9 +260,9 @@ public struct NookTopBarConfiguration: Sendable {
     /// only state, so it stays callable from any context.
     public var leadingTitle: @Sendable (AppState) -> String
 
-    /// SF Symbol for the top bar's leading cluster. Defaults to `nil`, which renders
-    /// the OpenNook brand mark. Set to `"house"` (or any SF Symbol) to override, or
-    /// keep `nil` for title-only on hosts that set a custom title without an icon.
+    /// SF Symbol for the top bar's leading cluster. Defaults to `nil`, which renders the
+    /// host brand mark (``NookHostBranding/mark``, or the OpenNook mark if the host hasn't
+    /// set one). Set to `"house"` (or any SF Symbol) to render that glyph instead.
     public var leadingIcon: String?
 
     /// Host-supplied actions for the top bar's **trailing** cluster, rendered to the

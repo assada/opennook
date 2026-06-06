@@ -48,6 +48,10 @@ public final class NookModuleRegistry {
     /// host configuration. See ``NookChromeBehavior``.
     public let chromeBehavior: NookChromeBehavior
 
+    /// Whether the framework installs its menu-bar status item. Held here so the app
+    /// shell can read it (and observe it) through ``ModuleHost``.
+    public let showsMenuBarExtra: Bool
+
     /// One broker per host process, shared across every module. Registered into each
     /// module's ``AppServices`` as ``NookModuleContext`` is built, so a view in module A
     /// and a view in module B both resolve the same instance — pins compose into one
@@ -69,6 +73,7 @@ public final class NookModuleRegistry {
         cycleHotkey: NookHotkey?,
         branding: NookHostBranding = .default,
         chromeBehavior: NookChromeBehavior = .default,
+        showsMenuBarExtra: Bool = true,
         presentationPinning: NookPresentationPinning = NookPresentationPinning()
     ) {
         self.registrations = registrations
@@ -76,6 +81,7 @@ public final class NookModuleRegistry {
         self.cycleHotkey = cycleHotkey
         self.branding = branding
         self.chromeBehavior = chromeBehavior
+        self.showsMenuBarExtra = showsMenuBarExtra
         self.presentationPinning = presentationPinning
         self.filePicker = NookFilePicker(presentationPinning: presentationPinning)
     }

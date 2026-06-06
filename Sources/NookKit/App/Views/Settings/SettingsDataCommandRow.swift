@@ -99,7 +99,7 @@ struct SettingsAboutCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            NookMarkView(
+            branding.markView(
                 size: 14,
                 strokeWidth: 1.2,
                 color: theme.headerInactiveIcon

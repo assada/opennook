@@ -49,6 +49,10 @@ struct NookTopBar: View {
     @Environment(\.nookChromeMetrics) private var metrics
     @Environment(\.nookChromeMotion) private var motion
 
+    /// Host branding — used for the leading-cluster brand mark when no `leadingIcon` is
+    /// configured. Injected by the expanded router. See ``NookHostBranding``.
+    @Environment(\.nookHostBranding) private var branding
+
     var body: some View {
         HStack(spacing: 8) {
             homeLeadingCluster
@@ -166,7 +170,7 @@ struct NookTopBar: View {
                 if let leadingIcon {
                     StaticHeaderIcon(systemName: leadingIcon)
                 } else {
-                    NookMarkView(
+                    branding.markView(
                         size: 11,
                         strokeWidth: 1.1,
                         color: resolvedTheme.secondaryLabel.opacity(0.92)
