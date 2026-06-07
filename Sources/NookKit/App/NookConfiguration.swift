@@ -123,10 +123,21 @@ public struct NookConfiguration: Sendable {
     /// `expand()`/`compact()` still return once the chrome has visibly arrived).
     public var transitions: NookTransitionConfiguration? = nil
 
-    /// Fixed width, in points, for the expanded surface. `nil` (the default) uses the
-    /// framework width (520pt). The chrome is content-driven and sizes to fit; this only
-    /// pins a stable width so the panel doesn't resize when switching between the home
-    /// and Settings surfaces.
+    /// Fixed width, in points, for the expanded surface's inner content column. `nil`
+    /// (the default) uses the framework width (520pt). The glass panel is
+    /// content-driven and sizes to fit; this only pins a stable width so the panel
+    /// doesn't resize when switching between the home and Settings surfaces.
+    ///
+    /// Usable width for edge-aligned content is not simply `expandedWidth`: the chrome
+    /// applies ``NookStyle/expandedContentInsets`` and ``NookChromeMetrics/edgePadding``
+    /// before your home view lays out, and hosts read the residual clearance through
+    /// ``EnvironmentValues/nookContentInsets``. See `Examples/LayoutNook/main.swift`
+    /// and the site guide *Layout and content insets* for how the knobs compose.
+    ///
+    /// Bottom command rows that should span the full content column should use
+    /// `frame(maxWidth: .infinity, alignment: .leading)` on the row, then pad by
+    /// `nookContentInsets` on the sides and bottom — not shrink-wrap to their buttons
+    /// and not add a separate `.padding(.horizontal, …)` on the home root.
     public var expandedWidth: CGFloat? = nil
 
     /// Called when the chrome transitions into the expanded surface (from any source).

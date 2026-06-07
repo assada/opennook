@@ -60,23 +60,30 @@ The app chrome layered over `NookSurface`.
 - **Input and display** - `NookHotkey` (`Sources/NookKit/System/NookHotkey.swift`),
   `NookDisplayPreference` (`Sources/NookKit/App/NookDisplayPreference.swift`).
 - **Layout metrics** - `NookLayout`, the public chrome dimension constants
-  (expanded width, edge padding, compact-slot size, breadcrumb width). Source:
-  `Sources/NookKit/App/Views/Layout/NookLayout.swift`.
+  (expanded width, edge padding, compact-slot size, breadcrumb width), and
+  `NookChromeMetrics`, the host-tunable metrics bag (`edgePadding`, compact slot
+  size, breadcrumb width, top-bar height). See
+  [Layout and content insets](/guides/layout-and-insets/). Source:
+  `Sources/NookKit/App/Views/Layout/NookLayout.swift`,
+  `Sources/NookKit/App/NookChromeMetrics.swift`.
 
 ## NookSurface
 
 The low-level notch window, re-exported through `NookApp`. Most hosts drive
 these through `NookKit` rather than directly; the host-facing knobs are:
 
-- `NookStyle` - corner radii and the built-in animation curves.
+- `NookStyle` - corner radii, `expandedContentInsets`, and the built-in animation curves.
 - `NookTransitionConfiguration` - per-instance animation overrides.
 - `NookPresentation` - notch-fused vs free-floating chrome.
+- `NookContentInsets` - curve-derived safe-area insets for edge-pinned host content.
+  See [Layout and content insets](/guides/layout-and-insets/).
 
 Both `NookStyle` and `NookTransitionConfiguration` are surfaced on
 `NookConfiguration`; see
-[Theming](/guides/theming/#chrome-shape-animation-and-width). The remaining
+[Theming](/guides/theming/#chrome-shape-animation-and-width) and
+[Layout and content insets](/guides/layout-and-insets/). The remaining
 surface types (`Nook`, `NookState`, `NookBackdrop`, `NookHoverBehavior`,
-`NookContentInsets`, `NookFeedback`) live under `Sources/NookSurface/`.
+`NookFeedback`) live under `Sources/NookSurface/`.
 
 ## NookComponents
 

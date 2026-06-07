@@ -142,6 +142,7 @@ swift run HelloNook     # register one view, go
 swift run ClockNook     # custom home view + a custom compact slot
 swift run ThemedNook    # a host-supplied theme + lifecycle hooks
 swift run ChromeNook    # the deeper chrome seams: launch defaults, labels, motion, brand mark, status
+swift run LayoutNook    # expanded width + nookContentInsets (avoid double horizontal padding)
 swift run ShelfNook     # a drop-files-on-the-notch shelf (NookComponents)
 swift run ActivityNook  # a priority live-activity queue (NookComponents)
 swift run VolumeNook    # an ambient volume glyph in the compact pill (NookComponents)

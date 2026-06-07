@@ -35,10 +35,12 @@ public enum NookBackdropMapping {
 
         // Translucent: one frosted sidebar material per appearance, with a darken
         // pass so chrome content stays legible over a bright wallpaper.
+        let strength = min(max(preferences.backdropStrength, 0.15), 1)
+        let baseDarken = isDark ? 0.52 : 0.10
         return .vibrancy(.init(
             material: .sidebar,
             blendingMode: .behindWindow,
-            darkenOpacity: isDark ? 0.52 : 0.10
+            darkenOpacity: baseDarken * strength
         ))
     }
 }

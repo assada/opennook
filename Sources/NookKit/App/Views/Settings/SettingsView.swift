@@ -58,7 +58,7 @@ struct SettingsView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 16) {
                 section("Appearance") {
-                    AppearanceSettingsSection(appState: appState)
+                    NookAppearanceSettingsSection(appState: appState)
                 }
 
                 section("Display") {

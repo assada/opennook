@@ -94,6 +94,22 @@ final class NookBackdropMappingTests: XCTestCase {
         XCTAssertEqual(backdrop, expected)
     }
 
+    func testBackdropStrengthScalesTranslucentDarken() {
+        var prefs = preferences(palette: .dark, style: .translucent)
+        prefs.backdropStrength = 0.5
+        let backdrop = NookBackdropMapping.notchBackdrop(
+            preferences: prefs,
+            effectiveColorScheme: .dark,
+            reduceTransparency: false
+        )
+        let expected = NookBackdrop.vibrancy(.init(
+            material: .sidebar,
+            blendingMode: .behindWindow,
+            darkenOpacity: 0.52 * 0.5
+        ))
+        XCTAssertEqual(backdrop, expected)
+    }
+
     /// The framework default — what every host gets before any mapping runs — must be
     /// the solid-black fill so cold-launch rendering matches the historical chrome.
     func testDefaultBackdropIsSolidBlack() {

@@ -17,6 +17,13 @@ import SwiftUI
 public struct NookChromeMetrics: Sendable, Equatable {
     /// Inset between the expanded panel edge and its content (and the basis for the
     /// re-injected safe-area insets). Default `8`.
+    ///
+    /// Applied by ``NookExpandedView`` around the inner VStack pinned to
+    /// ``NookConfiguration/expandedWidth``. Distinct from
+    /// ``NookStyle/expandedContentInsets`` (the chrome's own `.safeAreaInset` strip on
+    /// ``NookView``). Host home views should not mirror this with extra horizontal
+    /// padding — read ``EnvironmentValues/nookContentInsets`` instead. See
+    /// `Examples/LayoutNook/main.swift`.
     public var edgePadding: CGFloat
 
     /// Square size of each compact pill slot (the glyphs flanking the notch). Default `24`.

@@ -33,18 +33,29 @@ public struct NookAppearancePreferences: Equatable, Codable, Sendable {
     /// toggle). Persisted so a pinned-open nook survives a relaunch.
     public var keepNookOpen: Bool
 
+    /// Chrome control tint (lock, gear, toggles). `.system` follows macOS accent.
+    public var accentPreset: NookAccentPreset
+
+    /// Scales the frosted backdrop's legibility darken pass when ``surfaceStyle`` is
+    /// `.translucent`. `1` is the framework default; lower values show more wallpaper.
+    public var backdropStrength: Double
+
     public init(
         chromePalette: NookChromePalette = .followSystem,
         surfaceStyle: NookSurfaceStyle = .solid,
         presentation: NookPresentation = .auto,
         hapticFeedbackEnabled: Bool = false,
-        keepNookOpen: Bool = false
+        keepNookOpen: Bool = false,
+        accentPreset: NookAccentPreset = .system,
+        backdropStrength: Double = 1
     ) {
         self.chromePalette = chromePalette
         self.surfaceStyle = surfaceStyle
         self.presentation = presentation
         self.hapticFeedbackEnabled = hapticFeedbackEnabled
         self.keepNookOpen = keepNookOpen
+        self.accentPreset = accentPreset
+        self.backdropStrength = backdropStrength
     }
 
     /// Framework defaults — what `NookApp.main()` ships if the host has never written
@@ -57,6 +68,8 @@ public struct NookAppearancePreferences: Equatable, Codable, Sendable {
         case presentation
         case hapticFeedbackEnabled
         case keepNookOpen
+        case accentPreset
+        case backdropStrength
     }
 
     // Custom decode so JSON written by an older build (missing a later-added field)
@@ -70,6 +83,8 @@ public struct NookAppearancePreferences: Equatable, Codable, Sendable {
         self.presentation = try container.decodeIfPresent(NookPresentation.self, forKey: .presentation) ?? .auto
         self.hapticFeedbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticFeedbackEnabled) ?? false
         self.keepNookOpen = try container.decodeIfPresent(Bool.self, forKey: .keepNookOpen) ?? false
+        self.accentPreset = try container.decodeIfPresent(NookAccentPreset.self, forKey: .accentPreset) ?? .system
+        self.backdropStrength = try container.decodeIfPresent(Double.self, forKey: .backdropStrength) ?? 1
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -79,6 +94,8 @@ public struct NookAppearancePreferences: Equatable, Codable, Sendable {
         try container.encode(presentation, forKey: .presentation)
         try container.encode(hapticFeedbackEnabled, forKey: .hapticFeedbackEnabled)
         try container.encode(keepNookOpen, forKey: .keepNookOpen)
+        try container.encode(accentPreset, forKey: .accentPreset)
+        try container.encode(backdropStrength, forKey: .backdropStrength)
     }
 }
 

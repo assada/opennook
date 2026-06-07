@@ -179,6 +179,12 @@ configuration.expandedWidth = 600
 NookApp.main(configuration)
 ```
 
+For how `expandedWidth`, `expandedContentInsets`, `metrics.edgePadding`, and
+`nookContentInsets` compose into usable content width — and how to avoid
+double horizontal padding on the home view — see
+[Layout and content insets](/guides/layout-and-insets/) and
+`Examples/LayoutNook/main.swift`.
+
 ## Custom Settings surface
 
 The gear opens the framework's built-in Settings screen. To replace it with
@@ -283,6 +289,8 @@ resolving.
 
 ## See also
 
+- `Examples/LayoutNook/main.swift` - expanded width, trimmed insets, and
+  `nookContentInsets` in a host home view.
 - `Examples/ThemedNook/main.swift` - the working palette + lifecycle hooks
   example this guide mirrors.
 - [Settings chrome](/guides/settings-chrome/) - configures the top bar

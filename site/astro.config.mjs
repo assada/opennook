@@ -66,6 +66,7 @@ export default defineConfig({
           label: 'Customization',
           items: [
             { label: 'Theming', slug: 'guides/theming' },
+            { label: 'Layout and content insets', slug: 'guides/layout-and-insets' },
             { label: 'Settings chrome', slug: 'guides/settings-chrome' },
             { label: 'Displays and presentation', slug: 'guides/displays' },
           ],

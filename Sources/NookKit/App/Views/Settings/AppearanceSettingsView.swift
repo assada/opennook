@@ -8,12 +8,16 @@
 import NookSurface
 import SwiftUI
 
-/// Theme + surface pickers. Lives inside the Appearance settings group.
-struct AppearanceSettingsSection: View {
-    @ObservedObject var appState: AppState
+/// Theme + surface pickers for host Settings surfaces. Writes through ``AppState/replaceAppearancePreferences(_:)``.
+public struct NookAppearanceSettingsSection: View {
+    @ObservedObject public var appState: AppState
     @Environment(\.nookResolvedTheme) private var theme
 
-    var body: some View {
+    public init(appState: AppState) {
+        self.appState = appState
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             labeledPicker(title: "Theme", accessibilityLabel: "Theme") {
                 Picker("Theme", selection: chromePaletteBinding) {
@@ -61,6 +65,51 @@ struct AppearanceSettingsSection: View {
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(theme.tertiaryLabel)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Accent")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.secondaryLabel)
+                HStack(spacing: 6) {
+                    ForEach(NookAccentPreset.allCases) { preset in
+                        Button {
+                            var prefs = appState.appearancePreferences
+                            prefs.accentPreset = preset
+                            appState.replaceAppearancePreferences(prefs)
+                        } label: {
+                            Circle()
+                                .fill(preset.color())
+                                .frame(width: 18, height: 18)
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            appState.appearancePreferences.accentPreset == preset
+                                                ? theme.primaryLabel.opacity(0.85)
+                                                : Color.clear,
+                                            lineWidth: 1.5
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(preset.displayName)
+                    }
+                }
+            }
+
+            if appState.appearancePreferences.surfaceStyle == .translucent {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Translucency strength")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.secondaryLabel)
+                    Slider(value: backdropStrengthBinding, in: 0.35...1)
+                        .controlSize(.small)
+                        .accessibilityLabel("Translucency strength")
+                    Text("Lower shows more wallpaper through the frosted chrome.")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(theme.tertiaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -115,6 +164,17 @@ struct AppearanceSettingsSection: View {
             set: { next in
                 var prefs = appState.appearancePreferences
                 prefs.presentation = next
+                appState.replaceAppearancePreferences(prefs)
+            }
+        )
+    }
+
+    private var backdropStrengthBinding: Binding<Double> {
+        Binding(
+            get: { appState.appearancePreferences.backdropStrength },
+            set: { next in
+                var prefs = appState.appearancePreferences
+                prefs.backdropStrength = min(max(next, 0.15), 1)
                 appState.replaceAppearancePreferences(prefs)
             }
         )

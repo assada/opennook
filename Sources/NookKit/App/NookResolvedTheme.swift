@@ -98,7 +98,8 @@ public struct NookResolvedTheme: Sendable {
                 quaternaryLabel: Color.white.opacity(0.34),
                 subtleFill: Color.white.opacity(isSolid ? (trueSolid ? 0.07 : 0.12) : 0.055),
                 subtleStroke: Color.white.opacity(0.14),
-                headerInactiveIcon: Color.white.opacity(0.42)
+                headerInactiveIcon: Color.white.opacity(0.42),
+                accent: preferences.accentPreset.color()
             )
         }
 
@@ -109,7 +110,8 @@ public struct NookResolvedTheme: Sendable {
             quaternaryLabel: Color.black.opacity(0.32),
             subtleFill: Color.black.opacity(isSolid ? (trueSolid ? 0.045 : 0.055) : 0.030),
             subtleStroke: Color.black.opacity(0.09),
-            headerInactiveIcon: Color.black.opacity(0.38)
+            headerInactiveIcon: Color.black.opacity(0.38),
+            accent: preferences.accentPreset.color()
         )
     }
 }
