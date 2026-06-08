@@ -103,7 +103,7 @@ public struct NookExpandedView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if topBar.showsTopBar {
                 NookTopBar(
                     appState: appState,
@@ -113,11 +113,17 @@ public struct NookExpandedView: View {
                     leadingTitle: topBar.leadingTitle,
                     leadingIcon: topBar.leadingIcon,
                     showsSettings: topBar.showsSettings,
-                    trailingItems: topBar.trailingItems
+                    trailingItems: topBar.trailingItems,
+                    width: topBar.width
+                )
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: topBar.width == .contentColumn ? .leading : .center
                 )
 
                 if topBar.showsStatusBanner {
                     NookTransientStatusBanner(appState: appState, theme: resolvedTheme)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .animation(motion.statusBanner, value: appState.status)
                 }
             }
@@ -141,6 +147,7 @@ public struct NookExpandedView: View {
                         )
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .animation(motion.viewModeChange, value: appState.viewMode)
         }
         .environment(\.nookContentInsets, outerContentInsets.reducingBy(metrics.edgePadding))

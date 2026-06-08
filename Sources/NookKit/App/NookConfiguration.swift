@@ -241,6 +241,16 @@ public struct NookConfiguration: Sendable {
 /// look like X." Grouping them keeps ``NookConfiguration`` from accreting four loose
 /// fields, and gives future top-bar settings a natural home.
 public struct NookTopBarConfiguration: Sendable {
+    /// How the top bar spans the expanded content column.
+    public enum Width: Sendable, Equatable {
+        /// Leading and trailing clusters share the full column width; trailing icons
+        /// align to ``EnvironmentValues/nookContentInsets`` on the right (matches
+        /// LayoutNook host home rows).
+        case contentColumn
+        /// Shrink-wrap to icon clusters; centered when narrower than the column.
+        case intrinsic
+    }
+
     /// Whether the expanded surface renders the framework top bar (leading cluster,
     /// keep-open lock, gear). Defaults to `true`. Set to `false` for a bare expanded
     /// surface — a pure glance/widget with no framework chrome.
@@ -298,13 +308,20 @@ public struct NookTopBarConfiguration: Sendable {
     /// `NookTopBarConfiguration`.
     public var trailingItems: (@Sendable @MainActor () -> AnyView)?
 
+    /// How the icon row spans the expanded content column. Default
+    /// ``Width/contentColumn`` — leading/trailing icons share the same horizontal
+    /// gutter as host home content. ``Width/intrinsic`` reproduces the legacy
+    /// shrink-wrapped, centered bar.
+    public var width: Width
+
     public init(
         showsTopBar: Bool = true,
         showsSettings: Bool = true,
         showsStatusBanner: Bool = true,
         leadingTitle: @escaping @Sendable (AppState) -> String = { _ in "Home" },
         leadingIcon: String? = nil,
-        trailingItems: (@Sendable @MainActor () -> AnyView)? = nil
+        trailingItems: (@Sendable @MainActor () -> AnyView)? = nil,
+        width: Width = .contentColumn
     ) {
         self.showsTopBar = showsTopBar
         self.showsSettings = showsSettings
@@ -312,6 +329,7 @@ public struct NookTopBarConfiguration: Sendable {
         self.leadingTitle = leadingTitle
         self.leadingIcon = leadingIcon
         self.trailingItems = trailingItems
+        self.width = width
     }
 
     /// The framework-demo defaults — top bar on, Settings on, "Home" with the brand mark.

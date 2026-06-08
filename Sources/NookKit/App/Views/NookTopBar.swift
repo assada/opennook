@@ -34,12 +34,14 @@ struct NookTopBar: View {
     /// See ``NookTopBarConfiguration/trailingItems``.
     let trailingItems: (@Sendable @MainActor () -> AnyView)?
 
+    /// How the row spans the expanded content column. See ``NookTopBarConfiguration/Width``.
+    let width: NookTopBarConfiguration.Width
+
     @Environment(\.nookResolvedTheme) private var resolvedTheme
 
-    /// Curve-derived safe-area insets from the chrome. The leading/trailing
-    /// icon clusters pad themselves by these so the lock/gear glyphs don't sit
-    /// right under the panel's top corner curvature when a host configures a
-    /// larger ``NookStyle/topCornerRadius`` than the default.
+    /// Curve-derived safe-area insets from the chrome. Applied once on the full-width
+    /// bar so the leading cluster and trailing icons share the same gutter and the
+    /// `Spacer` can push the trailing cluster to the content column's trailing edge.
     @Environment(\.nookContentInsets) private var contentInsets
 
     /// Host-overridable chrome strings, layout metrics, and in-panel motion (see
@@ -54,10 +56,27 @@ struct NookTopBar: View {
     @Environment(\.nookHostBranding) private var branding
 
     var body: some View {
+        Group {
+            switch width {
+            case .contentColumn:
+                iconRow
+                    .padding(.leading, contentInsets.leading)
+                    .padding(.trailing, contentInsets.trailing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .intrinsic:
+                iconRow
+                    .padding(.leading, contentInsets.leading)
+                    .padding(.trailing, contentInsets.trailing)
+            }
+        }
+        .frame(height: metrics.topBarHeight)
+        .animation(motion.breadcrumb, value: appState.moduleBreadcrumb)
+    }
+
+    private var iconRow: some View {
         HStack(spacing: 8) {
             homeLeadingCluster
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.leading, contentInsets.leading)
 
             if appState.isSettingsView {
                 Image(systemName: "chevron.right")
@@ -117,42 +136,43 @@ struct NookTopBar: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 4) {
-                if let trailingItems {
-                    trailingItems()
-                }
+            trailingCluster
+        }
+    }
 
+    private var trailingCluster: some View {
+        HStack(spacing: 4) {
+            if let trailingItems {
+                trailingItems()
+            }
+
+            HeaderIcon(
+                systemName: appState.keepNookOpen ? "lock.fill" : "lock.open",
+                isActive: appState.keepNookOpen,
+                activeColor: chromeInteractionAccent,
+                help: labels.keepOpenHelp
+            ) {
+                toggleKeepOpen()
+            }
+
+            if showsSettings {
                 HeaderIcon(
-                    systemName: appState.keepNookOpen ? "lock.fill" : "lock.open",
-                    isActive: appState.keepNookOpen,
+                    systemName: "gearshape",
+                    isActive: appState.isSettingsView,
                     activeColor: chromeInteractionAccent,
-                    help: labels.keepOpenHelp
+                    help: labels.settingsHelp
                 ) {
-                    toggleKeepOpen()
-                }
-
-                if showsSettings {
-                    HeaderIcon(
-                        systemName: "gearshape",
-                        isActive: appState.isSettingsView,
-                        activeColor: chromeInteractionAccent,
-                        help: labels.settingsHelp
-                    ) {
-                        withAnimation(motion.viewModeChange) {
-                            if appState.isSettingsView {
-                                appState.showHome()
-                            } else {
-                                appState.showSettings()
-                            }
+                    withAnimation(motion.viewModeChange) {
+                        if appState.isSettingsView {
+                            appState.showHome()
+                        } else {
+                            appState.showSettings()
                         }
                     }
                 }
             }
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.trailing, contentInsets.trailing)
         }
-        .frame(height: metrics.topBarHeight)
-        .animation(motion.breadcrumb, value: appState.moduleBreadcrumb)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// On home the configured title stays visible next to its icon; in settings —

@@ -111,4 +111,12 @@ final class NookChromeStyleTests: XCTestCase {
         configuration.topBar.showsStatusBanner = false
         XCTAssertFalse(configuration.topBar.showsStatusBanner)
     }
+
+    func testTopBarWidthDefaultsToContentColumnAndIsConfigurable() {
+        XCTAssertEqual(NookConfiguration().topBar.width, .contentColumn)
+
+        var configuration = NookConfiguration()
+        configuration.topBar.width = .intrinsic
+        XCTAssertEqual(configuration.topBar.width, .intrinsic)
+    }
 }

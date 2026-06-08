@@ -234,10 +234,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         HStack(spacing: 0) {
             if nook.state == .expanded {
                 nook.expandedContent
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .environment(\.nookContentInsets, contentInsets)
                     .transition(.blur(intensity: 6).combined(with: .scale(y: 0.72, anchor: .top)).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: expandedContentInsets.top) }
         .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: expandedContentInsets.bottom) }
         .safeAreaInset(edge: .leading, spacing: 0) { Color.clear.frame(width: expandedContentInsets.leading) }
