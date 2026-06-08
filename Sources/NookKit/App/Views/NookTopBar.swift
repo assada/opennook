@@ -56,27 +56,16 @@ struct NookTopBar: View {
     @Environment(\.nookHostBranding) private var branding
 
     var body: some View {
-        Group {
-            switch width {
-            case .contentColumn:
-                iconRow
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, contentInsets.leading)
-                    .padding(.trailing, contentInsets.trailing)
-            case .intrinsic:
-                iconRow
-                    .padding(.leading, contentInsets.leading)
-                    .padding(.trailing, contentInsets.trailing)
-            }
-        }
-        .frame(height: metrics.topBarHeight)
-        .animation(motion.breadcrumb, value: appState.moduleBreadcrumb)
+        iconRow
+            .frame(height: metrics.topBarHeight)
+            .animation(motion.breadcrumb, value: appState.moduleBreadcrumb)
     }
 
     private var iconRow: some View {
         HStack(spacing: 8) {
             homeLeadingCluster
                 .fixedSize(horizontal: true, vertical: false)
+                .padding(.leading, contentInsets.leading)
 
             if appState.isSettingsView {
                 Image(systemName: "chevron.right")
@@ -137,7 +126,9 @@ struct NookTopBar: View {
             Spacer(minLength: 0)
 
             trailingCluster
+                .padding(.trailing, contentInsets.trailing)
         }
+        .frame(maxWidth: width == .contentColumn ? .infinity : nil, alignment: .leading)
     }
 
     private var trailingCluster: some View {
