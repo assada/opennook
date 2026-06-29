@@ -48,6 +48,24 @@ private final class FakePresenter: NookSurfacePresenting {
 }
 
 final class NookActivityQueueTests: XCTestCase {
+    /// Poll until `condition` is true. Fixed post-`Task.sleep` margins flake on CI when
+    /// the full suite runs in parallel and the cooperative scheduler defers drain tasks.
+    @MainActor
+    private func waitUntil(
+        timeout: Duration = .seconds(2),
+        pollInterval: Duration = .milliseconds(10),
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() { return }
+            try? await Task.sleep(for: pollInterval)
+        }
+        XCTFail("condition not met within \(timeout)", file: file, line: line)
+    }
+
     /// A queue whose `dwell` waits resolve instantly, for deterministic draining.
     @MainActor
     private func instantQueue() -> NookActivityQueue {
@@ -165,10 +183,8 @@ final class NookActivityQueueTests: XCTestCase {
 
         queue.enqueue(NookActivity(title: "A"))
         // Wait until the claim is granted and the activity is dwelling on screen.
-        try await Task.sleep(for: .milliseconds(50))
-        XCTAssertEqual(presenter.beginCount, 1, "activity claim granted")
+        await waitUntil { presenter.beginCount == 1 && queue.current != nil }
         XCTAssertEqual(presenter.endCount, 0, "still dwelling")
-        XCTAssertNotNil(queue.current)
 
         queue.suspend()
         // suspend() must NOT cancel the drain task - the current dwell must complete.
@@ -262,10 +278,8 @@ final class NookActivityQueueTests: XCTestCase {
 
         queue.enqueue(NookActivity(title: "A"))
         // Let the drain loop grant a claim and park in the (long) dwell.
-        try? await Task.sleep(for: .milliseconds(50))
-        XCTAssertEqual(presenter.beginCount, 1, "claim granted, activity on screen")
+        await waitUntil { presenter.beginCount == 1 && queue.current != nil }
         XCTAssertEqual(presenter.endCount, 0, "still dwelling — not yet released")
-        XCTAssertNotNil(queue.current)
 
         await queue.quiesce()
 
