@@ -10,6 +10,24 @@ import XCTest
 @testable import NookKit
 
 final class NookAppearancePreferencesTests: XCTestCase {
+    func testAccentPaletteOffersTenDistinctNamedChoices() {
+        let presets = NookAccentPreset.allCases
+
+        XCTAssertEqual(presets.count, 10)
+        XCTAssertEqual(Set(presets.map(\.rawValue)).count, 10)
+        XCTAssertEqual(Set(presets.map(\.displayName)).count, 10)
+    }
+
+    func testEveryAccentPresetRoundTripsThroughJSON() throws {
+        for preset in NookAccentPreset.allCases {
+            let original = NookAppearancePreferences(accentPreset: preset)
+            let data = try JSONEncoder().encode(original)
+            let decoded = try JSONDecoder().decode(NookAppearancePreferences.self, from: data)
+
+            XCTAssertEqual(decoded.accentPreset, preset)
+        }
+    }
+
     func testEffectiveColorSchemeHonorsChromePalette() {
         let prefsDark = NookAppearancePreferences(chromePalette: .dark, surfaceStyle: .translucent)
         XCTAssertEqual(prefsDark.effectiveColorScheme(systemScheme: .light), .dark)
