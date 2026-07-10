@@ -103,7 +103,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     let compactLeadingContent: CompactLeading
     let compactTrailingContent: CompactTrailing
     /// Construction-time flags set by the no-compact convenience init. Immutable so
-    /// they can't be flipped mid-flight and trip the view's transition heuristics - 
+    /// they can't be flipped mid-flight and trip the view's transition heuristics -
     /// the no-compact case is a build-time choice, not runtime state.
     let disableCompactLeading: Bool
     let disableCompactTrailing: Bool
@@ -155,6 +155,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// surface with no back target leaves that input untouched.
     private var isBackSwipeEnabled: (@MainActor () -> Bool)?
     private var backSwipeAction: (@MainActor () -> Void)?
+    private var backSwipeMonitor: NookBackSwipeMonitor?
 
     /// Configures the standard macOS page-back gesture for the panel.
     ///
@@ -521,7 +522,7 @@ public extension Nook {
         }.value
     }
 
-    /// Hide the chrome and tear the window down. Routed through ``runTransition(_:)`` - 
+    /// Hide the chrome and tear the window down. Routed through ``runTransition(_:)`` -
     /// exactly like `expand`/`compact` - so the hide and its teardown live fully inside
     /// the generation system: a newer transition reliably supersedes an in-flight hide,
     /// cancelling its task before its `fadeOutWindow`/`deinitializeWindow` can run.
@@ -884,13 +885,7 @@ private extension Nook {
         let rootView = NookView(nook: self)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(effectiveConversionAnimation, value: isHovering)
-        let hostingView = NookHostingView(rootView: rootView)
-        hostingView.isBackSwipeEnabled = { [weak self] in
-            self?.isBackSwipeEnabled?() ?? false
-        }
-        hostingView.performBackSwipe = { [weak self] in
-            self?.backSwipeAction?()
-        }
+        let hostingView = NSHostingView(rootView: rootView)
         hostingView.wantsLayer = true
         hostingView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -945,6 +940,17 @@ private extension Nook {
         }
 
         windowController = .init(window: panel)
+        backSwipeMonitor = NookBackSwipeMonitor(
+            window: panel,
+            isEnabled: { [weak self] in
+                guard let self else { return false }
+                return self.isHovering && (self.isBackSwipeEnabled?() ?? false)
+            },
+            perform: { [weak self] in
+                self?.backSwipeAction?()
+            }
+        )
+        backSwipeMonitor?.start()
     }
 
     /// Show with the hosting layer starting at opacity 0, then animate to 1. The window itself
@@ -969,6 +975,9 @@ private extension Nook {
     }
 
     func deinitializeWindow() {
+        backSwipeMonitor?.stop()
+        backSwipeMonitor = nil
+
         guard let windowController else { return }
         windowController.close()
         self.windowController = nil
