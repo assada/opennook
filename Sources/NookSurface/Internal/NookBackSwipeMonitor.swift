@@ -62,22 +62,29 @@ final class NookBackSwipeMonitor {
     }
 
     private func handleScrollWheel(_ event: NSEvent) -> NSEvent? {
+        let isDirectionInvertedFromDevice = event.isDirectionInvertedFromDevice
+
         guard
             !isTracking,
             NSEvent.isSwipeTrackingFromScrollEventsEnabled,
             event.hasPreciseScrollingDeltas,
             event.phase.contains(.began),
-            NookBackSwipePolicy.isHorizontal(
+            NookBackSwipePolicy.isFluidBackSwipe(
                 deltaX: event.scrollingDeltaX,
-                deltaY: event.scrollingDeltaY
+                deltaY: event.scrollingDeltaY,
+                isDirectionInvertedFromDevice: isDirectionInvertedFromDevice
             )
         else { return event }
 
         isTracking = true
         event.trackSwipeEvent(
             options: [.lockDirection, .clampGestureAmount],
-            dampenAmountThresholdMin: NookBackSwipePolicy.minimumGestureAmount,
-            max: NookBackSwipePolicy.maximumGestureAmount
+            dampenAmountThresholdMin: NookBackSwipePolicy.minimumGestureAmount(
+                isDirectionInvertedFromDevice: isDirectionInvertedFromDevice
+            ),
+            max: NookBackSwipePolicy.maximumGestureAmount(
+                isDirectionInvertedFromDevice: isDirectionInvertedFromDevice
+            )
         ) { [weak self] gestureAmount, _, isComplete, _ in
             guard let self else { return }
 
@@ -89,7 +96,8 @@ final class NookBackSwipeMonitor {
                 self.isEnabled(),
                 NookBackSwipePolicy.shouldNavigateBack(
                     gestureAmount: gestureAmount,
-                    isComplete: isComplete
+                    isComplete: isComplete,
+                    isDirectionInvertedFromDevice: isDirectionInvertedFromDevice
                 )
             else { return }
 
@@ -114,15 +122,36 @@ final class NookBackSwipeMonitor {
 }
 
 enum NookBackSwipePolicy {
-    static let minimumGestureAmount: CGFloat = -1
-    static let maximumGestureAmount: CGFloat = 0
+    static func minimumGestureAmount(isDirectionInvertedFromDevice: Bool) -> CGFloat {
+        isDirectionInvertedFromDevice ? -1 : 0
+    }
+
+    static func maximumGestureAmount(isDirectionInvertedFromDevice: Bool) -> CGFloat {
+        isDirectionInvertedFromDevice ? 0 : 1
+    }
 
     static func isHorizontal(deltaX: CGFloat, deltaY: CGFloat) -> Bool {
         abs(deltaX) > abs(deltaY) && deltaX != 0
     }
 
-    static func shouldNavigateBack(gestureAmount: CGFloat, isComplete: Bool) -> Bool {
-        isComplete && gestureAmount <= -0.5
+    static func isFluidBackSwipe(
+        deltaX: CGFloat,
+        deltaY: CGFloat,
+        isDirectionInvertedFromDevice: Bool
+    ) -> Bool {
+        guard isHorizontal(deltaX: deltaX, deltaY: deltaY) else { return false }
+        return isDirectionInvertedFromDevice ? deltaX < 0 : deltaX > 0
+    }
+
+    static func shouldNavigateBack(
+        gestureAmount: CGFloat,
+        isComplete: Bool,
+        isDirectionInvertedFromDevice: Bool
+    ) -> Bool {
+        guard isComplete else { return false }
+        return isDirectionInvertedFromDevice
+            ? gestureAmount <= -0.5
+            : gestureAmount >= 0.5
     }
 
     static func isDiscreteBackSwipe(deltaX: CGFloat, deltaY: CGFloat) -> Bool {
