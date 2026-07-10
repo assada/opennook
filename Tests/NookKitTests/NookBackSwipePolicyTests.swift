@@ -12,10 +12,11 @@ final class NookBackSwipePolicyTests: XCTestCase {
         XCTAssertFalse(NookBackSwipePolicy.isHorizontal(deltaX: 0, deltaY: 0))
     }
 
-    func testOnlyCompletedBackwardGestureNavigates() {
+    func testOnlyThresholdedBackwardGestureNavigates() {
         XCTAssertTrue(
             NookBackSwipePolicy.shouldNavigateBack(
-                gestureAmount: -1,
+                gestureAmount: 1,
+                phase: .ended,
                 isComplete: true,
                 isDirectionInvertedFromDevice: true
             )
@@ -23,14 +24,38 @@ final class NookBackSwipePolicyTests: XCTestCase {
         XCTAssertFalse(
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 0,
+                phase: .ended,
                 isComplete: true,
                 isDirectionInvertedFromDevice: true
             )
         )
         XCTAssertFalse(
             NookBackSwipePolicy.shouldNavigateBack(
-                gestureAmount: -1,
+                gestureAmount: 1,
+                phase: .changed,
                 isComplete: false,
+                isDirectionInvertedFromDevice: true
+            )
+        )
+    }
+
+    func testPhysicalGestureEndNavigatesBeforeSettlingCompletes() {
+        XCTAssertTrue(
+            NookBackSwipePolicy.shouldNavigateBack(
+                gestureAmount: 0.7,
+                phase: .ended,
+                isComplete: false,
+                isDirectionInvertedFromDevice: true
+            )
+        )
+    }
+
+    func testSettlingCompletionRemainsAFastFlickFallback() {
+        XCTAssertTrue(
+            NookBackSwipePolicy.shouldNavigateBack(
+                gestureAmount: 1,
+                phase: [],
+                isComplete: true,
                 isDirectionInvertedFromDevice: true
             )
         )
@@ -39,21 +64,21 @@ final class NookBackSwipePolicyTests: XCTestCase {
     func testFluidBackDirectionRespectsScrollDirectionPreference() {
         XCTAssertTrue(
             NookBackSwipePolicy.isFluidBackSwipe(
-                deltaX: -8,
+                deltaX: 8,
                 deltaY: 2,
                 isDirectionInvertedFromDevice: true
             )
         )
         XCTAssertTrue(
             NookBackSwipePolicy.isFluidBackSwipe(
-                deltaX: 8,
+                deltaX: -8,
                 deltaY: 2,
                 isDirectionInvertedFromDevice: false
             )
         )
         XCTAssertFalse(
             NookBackSwipePolicy.isFluidBackSwipe(
-                deltaX: -8,
+                deltaX: 8,
                 deltaY: 2,
                 isDirectionInvertedFromDevice: false
             )
@@ -63,19 +88,19 @@ final class NookBackSwipePolicyTests: XCTestCase {
     func testGestureBoundsFollowScrollDirectionPreference() {
         XCTAssertEqual(
             NookBackSwipePolicy.minimumGestureAmount(isDirectionInvertedFromDevice: true),
-            -1
+            0
         )
         XCTAssertEqual(
             NookBackSwipePolicy.maximumGestureAmount(isDirectionInvertedFromDevice: true),
-            0
+            1
         )
         XCTAssertEqual(
             NookBackSwipePolicy.minimumGestureAmount(isDirectionInvertedFromDevice: false),
-            0
+            -1
         )
         XCTAssertEqual(
             NookBackSwipePolicy.maximumGestureAmount(isDirectionInvertedFromDevice: false),
-            1
+            0
         )
     }
 
