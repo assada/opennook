@@ -67,6 +67,11 @@ public struct NookConfiguration: Sendable {
     /// Use ``addSettingsSection(id:title:content:)`` to append one from a `@ViewBuilder`.
     public var settingsSections: [NookSettingsSection] = []
 
+    /// Fine-grained visibility and reset behavior for the framework-owned Settings UI.
+    /// Defaults preserve every built-in control. Ignored when ``settings`` replaces the
+    /// complete surface. See ``NookBuiltInSettingsConfiguration``.
+    public var builtInSettings: NookBuiltInSettingsConfiguration = .default
+
     /// Top-bar configuration - leading cluster (title/icon), and the two visibility
     /// flags for the top bar and the Settings UI. Grouped so the related knobs
     /// travel together and future top-bar settings land here cleanly. See

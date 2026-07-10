@@ -43,6 +43,10 @@ public struct NookExpandedView: View {
     /// ``settings`` replaces it). See ``NookConfiguration/settingsSections``.
     let settingsSections: [NookSettingsSection]
 
+    /// Visibility and reset behavior for the framework-owned Settings surface.
+    /// Ignored when ``settings`` replaces that surface.
+    let builtInSettings: NookBuiltInSettingsConfiguration
+
     /// The framework top bar's host-configurable surface - leading cluster, top-bar
     /// visibility, Settings visibility. See ``NookTopBarConfiguration``.
     let topBar: NookTopBarConfiguration
@@ -87,6 +91,7 @@ public struct NookExpandedView: View {
         home: @escaping @Sendable @MainActor () -> AnyView = { AnyView(NookPlaceholderHomeView()) },
         settings: (@Sendable @MainActor () -> AnyView)? = nil,
         settingsSections: [NookSettingsSection] = [],
+        builtInSettings: NookBuiltInSettingsConfiguration = .default,
         topBar: NookTopBarConfiguration = .default,
         labels: NookChromeLabels = .default,
         metrics: NookChromeMetrics = .default,
@@ -104,6 +109,7 @@ public struct NookExpandedView: View {
         self.home = home
         self.settings = settings
         self.settingsSections = settingsSections
+        self.builtInSettings = builtInSettings
         self.topBar = topBar
         self.labels = labels
         self.metrics = metrics
@@ -256,6 +262,7 @@ public struct NookExpandedView: View {
             SettingsView(
                 appState: appState,
                 hostSections: settingsSections,
+                configuration: builtInSettings,
                 onToggleKeepOpen: toggleKeepOpen,
                 onResetAllSettings: resetAllSettings
             )

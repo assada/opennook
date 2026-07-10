@@ -20,6 +20,7 @@ struct SettingsView: View {
     @ObservedObject var appState: AppState
     /// Host-supplied sections rendered below the framework groups and above About.
     let hostSections: [NookSettingsSection]
+    let configuration: NookBuiltInSettingsConfiguration
     let onToggleKeepOpen: () -> Void
     let onResetAllSettings: () -> Void
 
@@ -60,60 +61,83 @@ struct SettingsView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: metrics.settingsSectionSpacing) {
-                section("Appearance") {
-                    NookAppearanceSettingsSection(appState: appState)
-                }
-
-                section("Display") {
-                    DisplaySettingsSection(appState: appState)
-                }
-
-                section("Shortcut & nook") {
-                    VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
-                        SettingsShortcutRow(appState: appState)
-                        if !appState.hotkeyRegistrationFailures.keys.filter({ $0 != NookHotkeyIDs.toggle }).isEmpty {
-                            SettingsHotkeyFailureRow(appState: appState)
-                        }
-                        SettingActionLine(
-                            icon: appState.keepNookOpen ? "pin.fill" : "pin",
-                            title: "Stay expanded",
-                            detail: appState.keepNookOpen
-                                ? "On — nook stays open after hover ends"
-                                : "Off — closes when the pointer leaves",
-                            accent: chromeInteractionAccent,
-                            action: onToggleKeepOpen
-                        )
-                        SettingActionLine(
-                            icon: appState.appearancePreferences.hapticFeedbackEnabled ? "hand.tap.fill" : "hand.tap",
-                            title: "Haptic feedback",
-                            detail: appState.appearancePreferences.hapticFeedbackEnabled
-                                ? "On — trackpad pulse on confirmation"
-                                : "Off — silent confirmation",
-                            accent: chromeInteractionAccent,
-                            action: toggleHapticFeedback
+                if configuration.showsAppearanceSection {
+                    section("Appearance") {
+                        NookAppearanceSettingsSection(
+                            appState: appState,
+                            configuration: configuration
                         )
                     }
                 }
 
-                section("Data") {
-                    VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
-                        SettingsDataCommandRow(
-                            title: "Preview status banner",
-                            subtitle: "Shows the transient message channel under the top bar",
-                            icon: "text.bubble",
-                            style: .standard,
-                            action: {
-                                appState.errorMessage = "Something went wrong — try again."
-                                appState.showHome()
+                if configuration.shows(.display) {
+                    section("Display") {
+                        DisplaySettingsSection(appState: appState)
+                    }
+                }
+
+                if configuration.showsShortcutSection {
+                    section("Shortcut & nook") {
+                        VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
+                            if configuration.shows(.globalShortcut) {
+                                SettingsShortcutRow(appState: appState)
+                                if !appState.hotkeyRegistrationFailures.keys
+                                    .filter({ $0 != NookHotkeyIDs.toggle }).isEmpty {
+                                    SettingsHotkeyFailureRow(appState: appState)
+                                }
                             }
-                        )
-                        SettingsDataCommandRow(
-                            title: "Reset All Settings",
-                            subtitle: "Theme, surface, layout, display, hotkey, stay expanded",
-                            icon: "arrow.counterclockwise",
-                            style: .standard,
-                            action: onResetAllSettings
-                        )
+                            if configuration.shows(.stayExpanded) {
+                                SettingActionLine(
+                                    icon: appState.keepNookOpen ? "pin.fill" : "pin",
+                                    title: "Stay expanded",
+                                    detail: appState.keepNookOpen
+                                        ? "On — nook stays open after hover ends"
+                                        : "Off — closes when the pointer leaves",
+                                    accent: chromeInteractionAccent,
+                                    action: onToggleKeepOpen
+                                )
+                            }
+                            if configuration.shows(.hapticFeedback) {
+                                SettingActionLine(
+                                    icon: appState.appearancePreferences.hapticFeedbackEnabled
+                                        ? "hand.tap.fill" : "hand.tap",
+                                    title: "Haptic feedback",
+                                    detail: appState.appearancePreferences.hapticFeedbackEnabled
+                                        ? "On — trackpad pulse on confirmation"
+                                        : "Off — silent confirmation",
+                                    accent: chromeInteractionAccent,
+                                    action: toggleHapticFeedback
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if configuration.showsDataSection {
+                    section("Data") {
+                        VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
+                            if configuration.shows(.statusBannerPreview) {
+                                SettingsDataCommandRow(
+                                    title: "Preview status banner",
+                                    subtitle: "Shows the transient message channel under the top bar",
+                                    icon: "text.bubble",
+                                    style: .standard,
+                                    action: {
+                                        appState.errorMessage = "Something went wrong — try again."
+                                        appState.showHome()
+                                    }
+                                )
+                            }
+                            if configuration.shows(.resetAllSettings) {
+                                SettingsDataCommandRow(
+                                    title: "Reset All Settings",
+                                    subtitle: "Appearance, display, shortcuts, and host settings",
+                                    icon: "arrow.counterclockwise",
+                                    style: .standard,
+                                    action: performResetAllSettings
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -123,14 +147,21 @@ struct SettingsView: View {
                     }
                 }
 
-                section("About") {
-                    SettingsAboutCard()
+                if configuration.shows(.about) {
+                    section("About") {
+                        SettingsAboutCard()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, metrics.settingsContentBottomPadding)
         }
         .frame(maxWidth: .infinity, maxHeight: settingsScrollMaxHeight, alignment: .leading)
+    }
+
+    private func performResetAllSettings() {
+        onResetAllSettings()
+        configuration.onResetAllSettings?()
     }
 
     /// A collapsible section bound to ``expandedSections``: a disclosure header, and - when

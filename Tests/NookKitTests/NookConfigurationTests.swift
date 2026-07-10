@@ -230,4 +230,23 @@ final class NookConfigurationTests: XCTestCase {
         XCTAssertNotNil(configuration.settings)
         _ = configuration.settings?()
     }
+
+    func testBuiltInSettingsAreFullyVisibleByDefault() {
+        let builtInSettings = NookConfiguration().builtInSettings
+
+        XCTAssertTrue(builtInSettings.hiddenItems.isEmpty)
+        XCTAssertNil(builtInSettings.onResetAllSettings)
+        XCTAssertTrue(NookBuiltInSettingsItem.allCases.allSatisfy(builtInSettings.shows))
+    }
+
+    func testBuiltInSettingsCanHideOnlyHostSelectedItems() {
+        var configuration = NookConfiguration()
+        configuration.builtInSettings.hiddenItems = [.theme, .surface]
+
+        XCTAssertFalse(configuration.builtInSettings.shows(.theme))
+        XCTAssertFalse(configuration.builtInSettings.shows(.surface))
+        XCTAssertTrue(configuration.builtInSettings.shows(.layout))
+        XCTAssertTrue(configuration.builtInSettings.shows(.accent))
+        XCTAssertTrue(configuration.builtInSettings.showsAppearanceSection)
+    }
 }
