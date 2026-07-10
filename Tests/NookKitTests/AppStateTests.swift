@@ -26,6 +26,37 @@ final class AppStateTests: XCTestCase {
         XCTAssertFalse(state.isSettingsView)
     }
 
+    func testNavigateBackClearsModuleBreadcrumbFromHome() {
+        let state = AppState()
+        state.moduleBreadcrumb = "Summary"
+
+        XCTAssertTrue(state.canNavigateBack)
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertNil(state.moduleBreadcrumb)
+        XCTAssertFalse(state.canNavigateBack)
+    }
+
+    func testNavigateBackReturnsFromSettingsBeforeClearingBreadcrumb() {
+        let state = AppState()
+        state.moduleBreadcrumb = "Summary"
+        state.showSettings()
+
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertTrue(state.isHomeView)
+        XCTAssertEqual(state.moduleBreadcrumb, "Summary")
+
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertNil(state.moduleBreadcrumb)
+    }
+
+    func testNavigateBackIsNoOpAtRootHome() {
+        let state = AppState()
+
+        XCTAssertFalse(state.canNavigateBack)
+        XCTAssertFalse(state.navigateBack())
+        XCTAssertTrue(state.isHomeView)
+    }
+
     func testResetTransientStatusClearsError() {
         let state = AppState()
         state.errorMessage = "Something broke"

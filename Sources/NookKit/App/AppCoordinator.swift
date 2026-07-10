@@ -201,7 +201,7 @@ public final class AppCoordinator: ObservableObject {
         appState: AppState,
         coordinatorBox: CoordinatorBox
     ) -> Nook<AnyView, AnyView, AnyView> {
-        Nook<AnyView, AnyView, AnyView>(
+        let nook = Nook<AnyView, AnyView, AnyView>(
             hoverBehavior: moduleHost.chromeBehavior.hoverBehavior,
             style: moduleHost.configuration.style ?? NookStyle(
                 topCornerRadius: NookAppearance.expandedTopCornerRadius,
@@ -232,6 +232,18 @@ public final class AppCoordinator: ObservableObject {
                 ))
             }
         )
+
+        nook.configureBackSwipe(
+            isEnabled: {
+                moduleHost.configuration.topBar.showsTopBar && appState.canNavigateBack
+            },
+            perform: {
+                withAnimation(moduleHost.configuration.motion.leadingClusterBack) {
+                    _ = appState.navigateBack()
+                }
+            }
+        )
+        return nook
     }
 
     /// A late-bound, weak handle to the coordinator, passed into the router-view

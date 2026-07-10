@@ -229,13 +229,7 @@ struct NookTopBar: View {
                     help: title,
                     action: {
                         withAnimation(motion.leadingClusterBack) {
-                            if appState.isSettingsView {
-                                appState.showHome()
-                            } else if hasBreadcrumb {
-                                appState.moduleBreadcrumb = nil
-                            } else {
-                                appState.showHome()
-                            }
+                            _ = appState.navigateBack()
                         }
                     }
                 ) { color in

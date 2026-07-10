@@ -145,10 +145,9 @@ public final class AppState: ObservableObject {
     /// - so the chrome reflects what the user is actually looking at, instead of
     /// the module's static name. Set to `nil` to clear.
     ///
-    /// The chrome treats this as a soft state hint: it doesn't affect ``viewMode``
-    /// or the back-to-home affordance. A module that wants the breadcrumb to be
-    /// clickable (e.g. "click to pop back one level") owns that interaction
-    /// inside its own surface - the chrome only renders the text.
+    /// The chrome treats this as a single drill-down level. Its leading control and
+    /// standard trackpad back gesture clear the breadcrumb; the module observes that
+    /// clear and pops its own route.
     @Published public var moduleBreadcrumb: String?
 
     /// Loads the persisted appearance, hotkey, and display preferences from
@@ -205,6 +204,27 @@ public final class AppState: ObservableObject {
 
     public var isSettingsView: Bool {
         viewMode == .settings
+    }
+
+    /// Whether the framework chrome currently exposes a back destination. Settings
+    /// returns to the previous home surface first; a module breadcrumb then returns
+    /// that home surface to its root.
+    public var canNavigateBack: Bool {
+        isSettingsView || moduleBreadcrumb?.isEmpty == false
+    }
+
+    /// Performs the same back transition used by the leading top-bar control and the
+    /// trackpad gesture. Returns `false` when already at the root home surface.
+    @discardableResult
+    public func navigateBack() -> Bool {
+        if isSettingsView {
+            showHome()
+            return true
+        }
+
+        guard moduleBreadcrumb?.isEmpty == false else { return false }
+        moduleBreadcrumb = nil
+        return true
     }
 
     /// Switches the chrome to the home view and clears ``errorMessage``.
