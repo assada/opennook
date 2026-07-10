@@ -25,7 +25,7 @@ public enum NookViewMode: Equatable, Sendable {
 public struct HotkeyRegistrationFailure: Equatable, Sendable {
     /// Human-readable name of the shortcut, e.g. `"Show Nook"` or a module's display name.
     public let shortcutName: String
-    /// The key combination that failed to register, e.g. `"⌥⌘;"`.
+    /// The key combination that failed to register, e.g. `"⌥Space"`.
     public let combination: String
 
     public init(shortcutName: String, combination: String) {
@@ -119,6 +119,12 @@ public final class AppState: ObservableObject {
     /// point the coordinator clears that id's entry. Each entry reflects the CURRENT
     /// outcome of its registration - not a last-writer-wins shared string.
     @Published public internal(set) var hotkeyRegistrationFailures: [String: HotkeyRegistrationFailure] = [:]
+
+    /// Registration failure for the user-configurable global show/hide shortcut.
+    /// Host onboarding can surface this without depending on OpenNook's internal id.
+    public var globalHotkeyRegistrationFailure: HotkeyRegistrationFailure? {
+        hotkeyRegistrationFailures[NookHotkeyIDs.toggle]
+    }
 
     /// Records the outcome of one hotkey registration attempt: `failure` non-nil keeps
     /// the entry, `nil` clears it. Called by the coordinator after every (re-)register.

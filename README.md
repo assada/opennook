@@ -29,7 +29,7 @@ known-good starting point to fork.
 ![File shelf via NookComponents](docs/images/nook-shelf.png)
 
 Collapsed, the nook is a compact pill in the menu-bar notch (customizable
-leading/trailing slots). Hover to expand on desktop, or press **⌥⌘;** to
+leading/trailing slots). Hover to expand on desktop, or press **⌥ Space** to
 toggle. Expanded, you get framework chrome (top bar, lock, settings) around
 the view you register. Layout follows the display: notch-fused on notched
 panels, floating capsule elsewhere (`NookPresentation`, overridable in
@@ -117,7 +117,7 @@ swift run Nook      # run the demo
 swift test          # run the test suite
 ```
 
-Once it's running, press **⌥⌘;** (or use the menu-bar item) to expand the
+Once it's running, press **⌥ Space** (or use the menu-bar item) to expand the
 nook. You can rebind that shortcut in Settings -> Shortcut & nook.
 
 For a real `.app` bundle (signing, notarization, Cmd-R in Xcode):

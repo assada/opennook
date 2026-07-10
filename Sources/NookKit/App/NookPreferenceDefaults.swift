@@ -32,7 +32,7 @@ public struct NookPreferenceDefaults: Sendable, Equatable {
     /// First-run appearance personalization. Defaults to ``NookAppearancePreferences/default``.
     public var appearance: NookAppearancePreferences
 
-    /// First-run global show/hide shortcut. Defaults to ``NookHotkey/default`` (⌘⌥;).
+    /// First-run global show/hide shortcut. Defaults to ``NookHotkey/default`` (⌥ Space).
     public var hotkey: NookHotkey
 
     /// First-run display target. Defaults to ``NookDisplayPreference/default`` (built-in).

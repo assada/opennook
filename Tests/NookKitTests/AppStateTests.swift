@@ -78,6 +78,18 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.hotkeyRegistrationFailures["toggle"], failure)
     }
 
+    func testGlobalHotkeyFailureHasPublicConvenienceAccessor() {
+        let state = AppState()
+        let failure = HotkeyRegistrationFailure(
+            shortcutName: "Show Nook",
+            combination: "⌥Space"
+        )
+
+        state.recordHotkeyRegistration(id: NookHotkeyIDs.toggle, failure: failure)
+
+        XCTAssertEqual(state.globalHotkeyRegistrationFailure, failure)
+    }
+
     /// A hotkey-registration failure must survive a transient-status reset - unlike
     /// `errorMessage`, it outlives a single nook session.
     func testHotkeyRegistrationFailureSurvivesTransientReset() {

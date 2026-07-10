@@ -11,10 +11,10 @@ import XCTest
 
 final class NookHotkeyTests: XCTestCase {
     func testDefaultHotkeyDisplaysCanonicalGlyphs() {
-        // The default is Command-Option-Semicolon. macOS renders modifiers in canonical
-        // order (⌃⌥⇧⌘) - Command is always last, so this shows as "⌥⌘;".
-        XCTAssertEqual(NookHotkey.default.displaySymbols, ["⌥", "⌘", ";"])
-        XCTAssertEqual(NookHotkey.default.display, "⌥⌘;")
+        XCTAssertEqual(NookHotkey.default.keyCode, UInt32(kVK_Space))
+        XCTAssertEqual(NookHotkey.default.carbonModifiers, UInt32(optionKey))
+        XCTAssertEqual(NookHotkey.default.displaySymbols, ["⌥", "Space"])
+        XCTAssertEqual(NookHotkey.default.display, "⌥Space")
     }
 
     func testModifierSymbolsAreInCanonicalOrder() {

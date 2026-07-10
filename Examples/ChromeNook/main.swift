@@ -15,7 +15,7 @@
 //   • a custom brand mark (replaces the OpenNook glyph everywhere)
 //   • top-bar trailing actions + the status banner with severity
 //
-// Run with `swift run ChromeNook`, then press ⌥⌘; to expand.
+// Run with `swift run ChromeNook`, then press ⌥ Space to expand.
 
 import NookApp
 import SwiftUI

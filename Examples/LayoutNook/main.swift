@@ -12,7 +12,7 @@
 // compose - and how a home view should read `\.nookContentInsets` instead of adding
 // its own horizontal padding.
 //
-// Run with `swift run LayoutNook`, then press ⌥⌘; to expand.
+// Run with `swift run LayoutNook`, then press ⌥ Space to expand.
 //
 // See also: site guide "Layout and content insets" (`guides/layout-and-insets`).
 

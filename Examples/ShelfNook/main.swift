@@ -9,7 +9,7 @@
 //
 // Drag files onto the notch and they collect in the shelf; drag them back out to
 // Finder or another app. The shelf persists across launches. Run with
-// `swift run ShelfNook`, press ⌥⌘; to expand, then drag a file onto the notch.
+// `swift run ShelfNook`, press ⌥ Space to expand, then drag a file onto the notch.
 
 import NookApp
 import NookComponents

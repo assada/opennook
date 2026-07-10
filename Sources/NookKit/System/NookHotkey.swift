@@ -25,11 +25,11 @@ public struct NookHotkey: Equatable, Codable, Sendable {
         self.keySymbol = keySymbol
     }
 
-    /// The default shortcut: ⌘⌥;
+    /// The default shortcut: ⌥ Space.
     public static let `default` = NookHotkey(
-        keyCode: UInt32(kVK_ANSI_Semicolon),
-        carbonModifiers: UInt32(cmdKey | optionKey),
-        keySymbol: ";"
+        keyCode: UInt32(kVK_Space),
+        carbonModifiers: UInt32(optionKey),
+        keySymbol: "Space"
     )
 
     /// Modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
@@ -42,10 +42,10 @@ public struct NookHotkey: Equatable, Codable, Sendable {
         return symbols
     }
 
-    /// Every glyph to render, modifiers first then the key - e.g. `["⌘", "⌥", ";"]`.
+    /// Every glyph to render, modifiers first then the key - e.g. `["⌥", "Space"]`.
     public var displaySymbols: [String] { modifierSymbols + [keySymbol] }
 
-    /// Flattened display string, e.g. `"⌘⌥;"`.
+    /// Flattened display string, e.g. `"⌥Space"`.
     public var display: String { displaySymbols.joined() }
 }
 
