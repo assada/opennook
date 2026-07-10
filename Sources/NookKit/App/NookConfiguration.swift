@@ -61,10 +61,10 @@ public struct NookConfiguration: Sendable {
     /// the built-in screen; the host view reads ``AppState`` via `@EnvironmentObject`.
     public var settings: (@Sendable @MainActor () -> AnyView)? = nil
 
-    /// Extra host sections appended to the framework's **built-in** Settings surface, rendered
-    /// below the framework groups (Appearance, Display, ...) and above About. Empty (the default)
+    /// Extra host sections for the framework's **built-in** Settings surface. By default they
+    /// render below the framework groups and above About. A host may place them by stable id in
+    /// ``NookBuiltInSettingsConfiguration/groups`` without replacing the Settings UI. Empty
     /// leaves Settings unchanged. Ignored when ``settings`` fully replaces the built-in screen.
-    /// Use ``addSettingsSection(id:title:content:)`` to append one from a `@ViewBuilder`.
     public var settingsSections: [NookSettingsSection] = []
 
     /// Fine-grained visibility and reset behavior for the framework-owned Settings UI.
@@ -237,9 +237,9 @@ public struct NookConfiguration: Sendable {
         settings = { AnyView(content()) }
     }
 
-    /// Appends one host section to the framework's built-in Settings surface from a `@ViewBuilder`.
-    /// The section renders below the framework groups and above About, in the same collapsible
-    /// disclosure chrome. See ``NookSettingsSection``.
+    /// Registers one host section in the framework's built-in Settings surface. Without a custom
+    /// group composition it renders below the framework groups and above About. A custom group
+    /// references the section by `id`. See ``NookSettingsSection``.
     public mutating func addSettingsSection<Content: View & Sendable>(
         id: String? = nil,
         title: String,

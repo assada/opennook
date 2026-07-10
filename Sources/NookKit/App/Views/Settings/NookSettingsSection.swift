@@ -8,9 +8,8 @@
 import SwiftUI
 
 /// A host-supplied section injected into the framework's built-in Settings surface. It is
-/// rendered below the framework's own groups (Appearance, Display, ...) and above About,
-/// wrapped in the same collapsible disclosure, connector hairline, and section label as the
-/// built-in groups (see ``SettingsSectionLabel``).
+/// rendered below the framework groups by default, or inside a host-composed
+/// ``NookSettingsGroup`` that references its stable id.
 ///
 /// Register sections through ``NookConfiguration/addSettingsSection(id:title:content:)`` (or by
 /// assigning ``NookConfiguration/settingsSections`` directly). The content is rendered inside the

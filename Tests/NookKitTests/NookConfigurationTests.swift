@@ -249,4 +249,29 @@ final class NookConfigurationTests: XCTestCase {
         XCTAssertTrue(configuration.builtInSettings.shows(.accent))
         XCTAssertTrue(configuration.builtInSettings.showsAppearanceSection)
     }
+
+    func testBuiltInSettingsAcceptTaskOrientedGroups() {
+        let groups = [
+            NookSettingsGroup(
+                id: "actions",
+                title: "Actions",
+                items: [.hostSection("host.actions")]
+            ),
+            NookSettingsGroup(
+                id: "appearance",
+                title: "Appearance",
+                items: [.builtIn(.layout), .builtIn(.accent)]
+            ),
+        ]
+
+        let configuration = NookBuiltInSettingsConfiguration(
+            hiddenItems: [.hapticFeedback],
+            groups: groups,
+            initiallyExpandedGroupIDs: ["actions"]
+        )
+
+        XCTAssertEqual(configuration.groups, groups)
+        XCTAssertEqual(configuration.initiallyExpandedGroupIDs, ["actions"])
+        XCTAssertEqual(configuration.hiddenItems, [.hapticFeedback])
+    }
 }
