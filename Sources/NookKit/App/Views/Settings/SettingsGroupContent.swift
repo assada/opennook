@@ -15,12 +15,22 @@ struct SettingsGroupContent: View {
 
     @Environment(\.nookResolvedTheme) private var theme
     @Environment(\.nookChromeMetrics) private var metrics
+    @State private var showsResetConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
             ForEach(group.items, id: \.self) { item in
                 groupItem(item)
             }
+        }
+        .confirmationDialog(
+            "Reset preferences?",
+            isPresented: $showsResetConfirmation
+        ) {
+            Button("Reset", role: .destructive, action: performResetAllSettings)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Appearance, display, shortcuts, and app-specific preferences will return to their defaults.")
         }
     }
 
@@ -85,11 +95,11 @@ struct SettingsGroupContent: View {
             )
         case .resetAllSettings:
             SettingsDataCommandRow(
-                title: "Reset All Settings",
-                subtitle: "Appearance, display, shortcuts, and host settings",
+                title: "Reset preferences…",
+                subtitle: "Return appearance, shortcuts, and app preferences to defaults",
                 icon: "arrow.counterclockwise",
                 style: .standard,
-                action: performResetAllSettings
+                action: { showsResetConfirmation = true }
             )
         case .about:
             SettingsAboutCard()
