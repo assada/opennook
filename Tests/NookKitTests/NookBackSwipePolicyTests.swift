@@ -17,7 +17,6 @@ final class NookBackSwipePolicyTests: XCTestCase {
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 1,
                 phase: .ended,
-                isComplete: true,
                 isDirectionInvertedFromDevice: true
             )
         )
@@ -25,15 +24,13 @@ final class NookBackSwipePolicyTests: XCTestCase {
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 0,
                 phase: .ended,
-                isComplete: true,
                 isDirectionInvertedFromDevice: true
             )
         )
         XCTAssertFalse(
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 1,
-                phase: .changed,
-                isComplete: false,
+                phase: .cancelled,
                 isDirectionInvertedFromDevice: true
             )
         )
@@ -44,18 +41,46 @@ final class NookBackSwipePolicyTests: XCTestCase {
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 0.7,
                 phase: .ended,
-                isComplete: false,
                 isDirectionInvertedFromDevice: true
             )
         )
     }
 
-    func testSettlingCompletionRemainsAFastFlickFallback() {
-        XCTAssertTrue(
+    func testSettlingCallbackNeverNavigatesAfterFingerUp() {
+        XCTAssertFalse(
             NookBackSwipePolicy.shouldNavigateBack(
                 gestureAmount: 1,
                 phase: [],
-                isComplete: true,
+                isDirectionInvertedFromDevice: true
+            )
+        )
+    }
+
+    func testSmallFlickCommitsImmediatelyOnFingerUp() {
+        XCTAssertTrue(
+            NookBackSwipePolicy.shouldNavigateBack(
+                gestureAmount: 0.1,
+                phase: .ended,
+                isDirectionInvertedFromDevice: true
+            )
+        )
+    }
+
+    func testMicroMovementRemainsCancelledOnFingerUp() {
+        XCTAssertFalse(
+            NookBackSwipePolicy.shouldNavigateBack(
+                gestureAmount: 0.03,
+                phase: .ended,
+                isDirectionInvertedFromDevice: true
+            )
+        )
+    }
+
+    func testDeliberateDragCommitsBeforeFingerUp() {
+        XCTAssertTrue(
+            NookBackSwipePolicy.shouldNavigateBack(
+                gestureAmount: 0.6,
+                phase: .changed,
                 isDirectionInvertedFromDevice: true
             )
         )

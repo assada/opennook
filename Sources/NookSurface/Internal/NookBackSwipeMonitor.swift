@@ -97,7 +97,6 @@ final class NookBackSwipeMonitor {
                 && NookBackSwipePolicy.shouldNavigateBack(
                     gestureAmount: gestureAmount,
                     phase: phase,
-                    isComplete: isComplete,
                     isDirectionInvertedFromDevice: isDirectionInvertedFromDevice
                 )
 
@@ -129,6 +128,13 @@ final class NookBackSwipeMonitor {
 }
 
 enum NookBackSwipePolicy {
+    /// A deliberate drag can commit before release once it crosses half a page.
+    private static let trackingCommitThreshold: CGFloat = 0.5
+
+    /// A flick has low displacement but clear intent. Commit it on finger-up instead of
+    /// waiting for AppKit's settling animation to extrapolate it to a full page.
+    private static let releaseCommitThreshold: CGFloat = 0.08
+
     static func minimumGestureAmount(isDirectionInvertedFromDevice: Bool) -> CGFloat {
         isDirectionInvertedFromDevice ? 0 : -1
     }
@@ -156,16 +162,26 @@ enum NookBackSwipePolicy {
     static func shouldNavigateBack(
         gestureAmount: CGFloat,
         phase: NSEvent.Phase,
-        isComplete: Bool,
         isDirectionInvertedFromDevice: Bool
     ) -> Bool {
-        // Commit as soon as the user releases the gesture. `isComplete` arrives later,
-        // after AppKit's settling animation, and remains a fallback for fast flicks that
-        // cross the threshold only while settling.
-        guard phase.contains(.ended) || isComplete else { return false }
-        return isDirectionInvertedFromDevice
-            ? gestureAmount >= 0.5
-            : gestureAmount <= -0.5
+        guard !phase.contains(.cancelled) else { return false }
+
+        let backwardProgress =
+            isDirectionInvertedFromDevice
+            ? gestureAmount
+            : -gestureAmount
+
+        if phase.contains(.changed) {
+            return backwardProgress >= trackingCommitThreshold
+        }
+
+        if phase.contains(.ended) {
+            return backwardProgress >= releaseCommitThreshold
+        }
+
+        // Never navigate from AppKit's delayed settling callbacks. A gesture either
+        // commits while active/on finger-up or remains cancelled.
+        return false
     }
 
     static func isDiscreteBackSwipe(deltaX: CGFloat, deltaY: CGFloat) -> Bool {
