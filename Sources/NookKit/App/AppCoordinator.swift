@@ -212,7 +212,7 @@ public final class AppCoordinator: ObservableObject {
                     moduleHost: moduleHost,
                     appState: appState,
                     toggleKeepOpen: { coordinatorBox.coordinator?.toggleKeepNookOpen() },
-                    hide: { coordinatorBox.coordinator?.hideNook() },
+                    hide: { coordinatorBox.coordinator?.handleEscapeCommand() },
                     resetAllSettings: { coordinatorBox.coordinator?.resetAllSettingsToDefaults() },
                     switchModule: { id in coordinatorBox.coordinator?.switchModule(to: id) }
                 ))
@@ -897,6 +897,21 @@ public final class AppCoordinator: ObservableObject {
             guard let self else { return }
             self.setUserInitiatedOpen(false)
             await self.surface.hide()
+        }
+    }
+
+    /// Applies the host's Escape policy when the expanded SwiftUI surface receives an
+    /// exit command. Global Escape registration remains a host concern because it may
+    /// intentionally consume a key while another application owns focus.
+    func handleEscapeCommand() {
+        switch moduleHost.chromeBehavior.escapeBehavior {
+        case .compact:
+            compactNook()
+        case .dismiss:
+            dismissNook()
+        case .dismissWhenPointerOutside:
+            guard !surface.isHovering else { return }
+            dismissNook()
         }
     }
 
