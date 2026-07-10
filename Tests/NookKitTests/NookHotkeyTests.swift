@@ -15,6 +15,8 @@ final class NookHotkeyTests: XCTestCase {
         XCTAssertEqual(NookHotkey.default.carbonModifiers, UInt32(optionKey))
         XCTAssertEqual(NookHotkey.default.displaySymbols, ["⌥", "Space"])
         XCTAssertEqual(NookHotkey.default.display, "⌥Space")
+        XCTAssertEqual(NookHotkey.default.menuKeyEquivalent, " ")
+        XCTAssertEqual(NookHotkey.default.menuModifierMask, [.option])
     }
 
     func testModifierSymbolsAreInCanonicalOrder() {
@@ -25,6 +27,19 @@ final class NookHotkeyTests: XCTestCase {
         )
         XCTAssertEqual(hotkey.modifierSymbols, ["⌃", "⌥", "⇧", "⌘"])
         XCTAssertEqual(hotkey.display, "⌃⌥⇧⌘A")
+        XCTAssertEqual(hotkey.menuKeyEquivalent, "a")
+        XCTAssertEqual(hotkey.menuModifierMask, [.control, .option, .shift, .command])
+    }
+
+    func testNamedKeyUsesAppKitMenuEquivalent() {
+        let hotkey = NookHotkey(
+            keyCode: UInt32(kVK_LeftArrow),
+            carbonModifiers: UInt32(controlKey),
+            keySymbol: "←"
+        )
+
+        XCTAssertEqual(hotkey.menuKeyEquivalent, "\u{F702}")
+        XCTAssertEqual(hotkey.menuModifierMask, [.control])
     }
 
     func testRoundTripThroughJSON() throws {

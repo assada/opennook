@@ -144,18 +144,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildMenu() }
             .store(in: &cancellables)
+
+        // The global registration already tracks this value in AppCoordinator. Keep
+        // the menu's visible key equivalent on the same source of truth as well.
+        coordinator.appState.$hotkey
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildMenu() }
+            .store(in: &cancellables)
     }
 
     private func rebuildMenu() {
         guard let statusItem else { return }
         let hostName = moduleHost.branding.hostName
+        let showHotkey = coordinator.appState.hotkey
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(
+        let showItem = NSMenuItem(
             title: "Show \(hostName)",
             action: #selector(showNook),
-            keyEquivalent: ";"
-        ))
+            keyEquivalent: showHotkey.menuKeyEquivalent
+        )
+        showItem.keyEquivalentModifierMask = showHotkey.menuModifierMask
+        menu.addItem(showItem)
         // "Settings..." tracks the chrome: dropped when the active module disabled Settings,
         // since there is no Settings UI to open. "Toggle Stay Expanded" is kept regardless
         // - it's chrome-independent and is the only keep-open control left once the top
