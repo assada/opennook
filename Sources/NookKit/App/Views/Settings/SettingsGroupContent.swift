@@ -32,6 +32,7 @@ struct SettingsGroupContent: View {
         } message: {
             Text("Appearance, display, shortcuts, and app-specific preferences will return to their defaults.")
         }
+        .nookKeepsExpanded(while: $showsResetConfirmation)
     }
 
     @ViewBuilder
