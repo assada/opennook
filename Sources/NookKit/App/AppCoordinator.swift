@@ -40,6 +40,24 @@ public final class AppCoordinator: ObservableObject {
     public let hotkeyController: HotkeyController
     var cancellables = Set<AnyCancellable>()
 
+    /// The surface's current lifecycle state. Hosts can use this to coordinate
+    /// application-specific shortcuts and transient UI without reaching into the
+    /// concrete `Nook` window implementation.
+    public var nookState: NookState { surface.state }
+
+    /// Emits each distinct surface lifecycle transition.
+    public var nookStateChanges: AnyPublisher<NookState, Never> {
+        surface.statePublisher
+    }
+
+    /// `true` while the pointer is over the nook chrome.
+    public var isPointerOverNook: Bool { surface.isHovering }
+
+    /// Emits each distinct pointer-presence transition over the nook chrome.
+    public var nookHoverChanges: AnyPublisher<Bool, Never> {
+        surface.isHoveringPublisher
+    }
+
     /// An opaque `NotificationCenter` observer token, wrapped so the non-isolated
     /// `deinit` can read it to unregister.
     ///
@@ -861,6 +879,24 @@ public final class AppCoordinator: ObservableObject {
             guard let self else { return }
             self.setUserInitiatedOpen(false)
             await self.surface.compact(on: nil)
+        }
+    }
+
+    /// Compacts the surface back into the pill.
+    ///
+    /// This explicit name is provided for hosts that need to distinguish compacting
+    /// from fully dismissing the surface. ``hideNook()`` remains as the original API
+    /// and retains its existing compacting behavior.
+    public func compactNook() {
+        hideNook()
+    }
+
+    /// Fully hides the surface and tears down its window.
+    public func dismissNook() {
+        enqueueLifecycle { [weak self] in
+            guard let self else { return }
+            self.setUserInitiatedOpen(false)
+            await self.surface.hide()
         }
     }
 

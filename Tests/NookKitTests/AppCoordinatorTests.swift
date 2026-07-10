@@ -330,6 +330,43 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertNotNil(token, "with the user gone, a transient claim is granted")
     }
 
+    /// Hosts can observe the surface without reaching into the concrete window type.
+    func testHostSurfaceStateAndHoverAccessorsReflectLiveSurface() async {
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(
+            modules: [SpyModule(id: "A", expandLog: ExpandLog())],
+            surface: surface
+        )
+
+        XCTAssertEqual(coordinator.nookState, .hidden)
+        XCTAssertFalse(coordinator.isPointerOverNook)
+
+        await surface.compact(on: nil)
+        surface.isHovering = true
+
+        XCTAssertEqual(coordinator.nookState, .compact)
+        XCTAssertTrue(coordinator.isPointerOverNook)
+    }
+
+    /// Full dismissal is distinct from the legacy `hideNook` compacting behavior.
+    func testDismissNookFullyHidesSurface() async {
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(
+            modules: [SpyModule(id: "A", expandLog: ExpandLog())],
+            surface: surface
+        )
+
+        coordinator.showNook()
+        await coordinator.drainLifecycleForTesting()
+        XCTAssertEqual(coordinator.nookState, .expanded)
+
+        coordinator.dismissNook()
+        await drainAndPump(coordinator)
+
+        XCTAssertEqual(coordinator.nookState, .hidden)
+        XCTAssertFalse(coordinator.isUserEngaged)
+    }
+
     /// If the surface collapses independently (hover-exit auto-compact, simulated here
     /// by a direct `compact(on:)`), the `bindSurfaceVisibility` sink clears the user-
     /// open intent - so the arbiter is willing to grant the next claim.
