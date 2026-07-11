@@ -5,7 +5,6 @@
 // you may not use this file except in compliance with the License.
 // A copy is included at /LICENSE in the repository root.
 
-import AppKit
 import SwiftUI
 
 /// Top-level Settings surface, rendered when the expanded nook is in `.settings` mode.
@@ -32,14 +31,15 @@ struct SettingsView: View {
     /// Which sections are expanded. In-memory for the lifetime of this Settings view.
     @State private var expandedSections: Set<String>
 
-    /// Caps Settings height from the main display so rows scroll instead of clipping below the notch panel.
+    /// Caps Settings from the same resolved target screen the coordinator gives the nook.
+    /// This keeps a shorter secondary display from inheriting the main display's viewport.
     private var settingsScrollMaxHeight: CGFloat {
-        guard let screen = NSScreen.main else {
-            return 340
+        guard let screen = NookScreenLocator.screen(matching: appState.displayPreference) else {
+            return SettingsViewportSizing.fallbackMaximumHeight
         }
-
-        let visibleHeight = screen.visibleFrame.height
-        return min(440, max(260, visibleHeight * 0.36))
+        return SettingsViewportSizing.maximumHeight(
+            targetScreenVisibleHeight: screen.visibleFrame.height
+        )
     }
 
     init(
@@ -55,7 +55,9 @@ struct SettingsView: View {
         self.onToggleKeepOpen = onToggleKeepOpen
         self.onResetAllSettings = onResetAllSettings
         _expandedSections = State(
-            initialValue: configuration.initiallyExpandedGroupIDs ?? ["Appearance"]
+            initialValue: configuration.resolvedInitiallyExpandedGroupIDs(
+                hostSections: hostSections
+            )
         )
     }
 

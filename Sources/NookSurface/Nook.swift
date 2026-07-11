@@ -251,8 +251,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// to "the last call wins," even when the unstructured tasks start out of order.
     private var transitionGeneration = 0
 
+    /// One worker waits for this movable deadline. Geometry changes only push the
+    /// deadline forward; they do not cancel and recreate a task on every animation frame.
+    private var layoutGraceDeadline: ContinuousClock.Instant?
+
     /// Auto-releases after expanded content resizes. Refreshed on each geometry change
-    /// so rapid layout churn extends the grace window.
+    /// by moving ``layoutGraceDeadline`` while one worker remains active.
     private var layoutGraceTask: Task<Void, Never>?
 
     private var cancellables = Set<AnyCancellable>()
@@ -275,6 +279,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         observeScreenParameters()
         observeStateForPendingFeedback()
         observeStateForLifecycleHooks()
+        observeStateForLayoutGrace()
     }
 
     /// Internal designated init for the no-compact-content case. The `disableCompact*`
@@ -322,7 +327,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
 
     var effectiveOpeningAnimation: Animation { transitionConfiguration.openingAnimation ?? style.openingAnimation }
     var effectiveClosingAnimation: Animation { transitionConfiguration.closingAnimation ?? style.closingAnimation }
-    var effectiveConversionAnimation: Animation { transitionConfiguration.conversionAnimation ?? style.conversionAnimation }
+    var effectiveConversionAnimation: Animation {
+        transitionConfiguration.conversionAnimation ?? style.conversionAnimation
+    }
 
     /// When the chrome becomes visible (state transitions out of `.hidden`), replay any
     /// feedback that was requested during the boot race. Single sink keeps lifetime tied
@@ -331,11 +338,19 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         $state
             .removeDuplicates()
             .sink { [weak self] newState in
-                guard let self, newState != .hidden, let pending = self.pendingFeedback else { return }
-                self.pendingFeedback = nil
-                self.setFeedbackEvent(pending)
+                guard newState != .hidden else { return }
+                self?.replayPendingFeedback(at: Date())
             }
             .store(in: &cancellables)
+    }
+
+    /// Replays the latest cue requested while hidden, starting its animation and clear
+    /// deadline from visibility rather than from the stale request timestamp.
+    /// Internal so the timestamp-sensitive behavior can be tested without a real window.
+    func replayPendingFeedback(at date: Date) {
+        guard let pending = pendingFeedback else { return }
+        pendingFeedback = nil
+        setFeedbackEvent(pending.reanchored(at: date))
     }
 
     /// Fire the host's lifecycle callbacks on every distinct state transition. A single
@@ -351,9 +366,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .sink { [weak self] newState in
                 guard let self else { return }
                 switch newState {
-                case .expanded: self.onExpand?()
-                case .compact: self.onCompact?()
-                case .hidden: self.onHide?()
+                    case .expanded: self.onExpand?()
+                    case .compact: self.onCompact?()
+                    case .hidden: self.onHide?()
                 }
             }
             .store(in: &cancellables)
@@ -501,10 +516,10 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
 
 // MARK: - Public lifecycle
 
-public extension Nook {
+extension Nook {
     /// Expand the chrome. Pass `nil` (the default) to let ``resolvedScreen`` pick the
     /// target - typically the host's persisted display preference via ``screenProvider``.
-    func expand(on screen: NSScreen? = nil) async {
+    public func expand(on screen: NSScreen? = nil) async {
         guard let target = screen ?? resolvedScreen else { return }
         let skipHide = transitionConfiguration.skipIntermediateHides
         await runTransition { [weak self] generation in
@@ -514,7 +529,7 @@ public extension Nook {
 
     /// Collapse the chrome to its compact pill. Pass `nil` (the default) to let
     /// ``resolvedScreen`` pick the target.
-    func compact(on screen: NSScreen? = nil) async {
+    public func compact(on screen: NSScreen? = nil) async {
         guard let target = screen ?? resolvedScreen else { return }
         let skipHide = transitionConfiguration.skipIntermediateHides
         await runTransition { [weak self] generation in
@@ -526,7 +541,7 @@ public extension Nook {
     /// exactly like `expand`/`compact` - so the hide and its teardown live fully inside
     /// the generation system: a newer transition reliably supersedes an in-flight hide,
     /// cancelling its task before its `fadeOutWindow`/`deinitializeWindow` can run.
-    func hide() async {
+    public func hide() async {
         await runTransition { [weak self] generation in
             await self?._hide(generation: generation)
         }.value
@@ -535,7 +550,7 @@ public extension Nook {
 
 // MARK: - Peripheral feedback
 
-public extension Nook {
+extension Nook {
     /// Play a one-shot peripheral cue along the chrome's perimeter. Default is the shimmer sweep.
     ///
     /// Use this for low-priority "something happened" signals the user can catch in
@@ -543,13 +558,13 @@ public extension Nook {
     /// timing - no internal queueing or debouncing; rapid successive calls re-anchor
     /// `startedAt` and the in-flight animation restarts. A cue requested while the chrome
     /// is hidden is queued and replayed the next time the nook becomes visible.
-    func playFeedback(
+    public func playFeedback(
         _ effect: NookFeedback = .shimmer,
         tint: Color = Color(nsColor: .controlAccentColor),
         duration: TimeInterval = 0.85,
         repeats: Bool = false
     ) {
-        guard effect != .none else { return }
+        guard effect != .none, NookFeedbackEvent.isPlayableDuration(duration) else { return }
         let event = NookFeedbackEvent(
             id: UUID(),
             startedAt: Date(),
@@ -560,17 +575,17 @@ public extension Nook {
             repeats: repeats
         )
         switch state {
-        case .compact, .expanded:
-            // Chrome is visible (either as compact pill or expanded surface) - fire
-            // immediately. The shimmer overlay strokes the same `NookShape` perimeter in
-            // both states, so the visual reads on either.
-            setFeedbackEvent(event)
-            pendingFeedback = nil
-        case .hidden:
-            // Boot race or user-hidden: queue for the next visible transition. The overlay
-            // can't paint without chrome, but we don't want to drop the request entirely
-            // because the cue's whole job is "tell the user when they're not looking."
-            pendingFeedback = event
+            case .compact, .expanded:
+                // Chrome is visible (either as compact pill or expanded surface) - fire
+                // immediately. The shimmer overlay strokes the same `NookShape` perimeter in
+                // both states, so the visual reads on either.
+                setFeedbackEvent(event)
+                pendingFeedback = nil
+            case .hidden:
+                // Boot race or user-hidden: queue for the next visible transition. The overlay
+                // can't paint without chrome, but we don't want to drop the request entirely
+                // because the cue's whole job is "tell the user when they're not looking."
+                pendingFeedback = event
         }
     }
 }
@@ -580,14 +595,16 @@ extension Nook {
     /// finished so the overlay's `TimelineView` is torn down instead of ticking forever. Any
     /// prior pending clear is cancelled first so a fresh event always wins.
     func setFeedbackEvent(_ event: NookFeedbackEvent) {
+        guard event.hasPlayableDuration else { return }
         feedbackClearTask?.cancel()
+        feedbackClearTask = nil
         feedbackEvent = event
 
-        guard !event.repeats, event.duration > 0 else { return }
+        guard !event.repeats else { return }
         let duration = event.duration
         let id = event.id
         feedbackClearTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled, let self else { return }
             // Only clear if this is still the event we armed for - a newer cue (which cancels
             // this task) or a repeating cue must not be nilled out from under the overlay.
@@ -721,7 +738,8 @@ extension Nook {
         // newer transition supersedes us, or if hover behavior stops requesting deferral.
         if hoverBehavior.contains(.keepVisible), isHovering {
             while isCurrent(generation), isHovering,
-                  hoverBehavior.contains(.keepVisible), !Task.isCancelled {
+                hoverBehavior.contains(.keepVisible), !Task.isCancelled
+            {
                 try? await Task.sleep(for: Self.keepVisiblePollInterval)
             }
             // Superseded (or cancelled) while waiting for the cursor to leave: a newer
@@ -844,18 +862,49 @@ extension Nook {
     }
 
     func beginLayoutGrace() {
-        layoutGraceTask?.cancel()
-        isLayoutGraceActive = true
         let duration = layoutGraceDuration
-        layoutGraceTask = Task { [weak self] in
-            try? await Task.sleep(for: duration)
-            guard let self, !Task.isCancelled else { return }
-            self.isLayoutGraceActive = false
-            self.layoutGraceTask = nil
+        guard duration > .zero else {
+            endLayoutGrace()
+            return
+        }
+
+        layoutGraceDeadline = ContinuousClock.now + duration
+
+        if layoutGraceTask == nil {
+            layoutGraceTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    guard let deadline = self?.layoutGraceDeadline else { return }
+                    let remaining = deadline - ContinuousClock.now
+
+                    if remaining > .zero {
+                        do {
+                            try await Task.sleep(for: remaining)
+                        } catch {
+                            return
+                        }
+                        // A geometry update may have pushed the deadline forward while
+                        // this worker slept. Re-read it instead of minting a replacement.
+                        continue
+                    }
+
+                    guard let self else { return }
+                    self.layoutGraceDeadline = nil
+                    self.layoutGraceTask = nil
+                    if self.isLayoutGraceActive {
+                        self.isLayoutGraceActive = false
+                    }
+                    return
+                }
+            }
+        }
+
+        if !isLayoutGraceActive {
+            isLayoutGraceActive = true
         }
     }
 
     func endLayoutGrace() {
+        layoutGraceDeadline = nil
         layoutGraceTask?.cancel()
         layoutGraceTask = nil
         if isLayoutGraceActive { isLayoutGraceActive = false }
@@ -870,8 +919,8 @@ extension Nook {
     }
 }
 
-private extension Nook {
-    func initializeWindow(screen: NSScreen, orderFront: Bool = true) {
+extension Nook {
+    fileprivate func initializeWindow(screen: NSScreen, orderFront: Bool = true) {
         deinitializeWindow()
 
         notchSize = screen.notchFrameWithMenubarAsBackup.size
@@ -911,7 +960,7 @@ private extension Nook {
             dragInterceptor.topAnchor.constraint(equalTo: container.topAnchor),
             dragInterceptor.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             dragInterceptor.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            dragInterceptor.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            dragInterceptor.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ])
 
         let panel = NookPanel(
@@ -955,7 +1004,7 @@ private extension Nook {
 
     /// Show with the hosting layer starting at opacity 0, then animate to 1. The window itself
     /// is at full alpha - only the SwiftUI content fades in, masking any first-frame layout pop.
-    func showWindow() {
+    fileprivate func showWindow() {
         guard let window = windowController?.window else { return }
 
         let layer = hostingLayer
@@ -974,7 +1023,7 @@ private extension Nook {
         layer.opacity = 1
     }
 
-    func deinitializeWindow() {
+    fileprivate func deinitializeWindow() {
         backSwipeMonitor?.stop()
         backSwipeMonitor = nil
 

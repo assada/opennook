@@ -6,6 +6,7 @@
 // A copy is included at /LICENSE in the repository root.
 
 import XCTest
+
 @testable import NookKit
 
 final class AppStateTests: XCTestCase {
@@ -102,7 +103,8 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertNil(state.errorMessage, "the transient channel is cleared")
         XCTAssertEqual(
-            state.hotkeyRegistrationFailures["toggle"], failure,
+            state.hotkeyRegistrationFailures["toggle"],
+            failure,
             "the durable hotkey failure is NOT cleared by a transient reset"
         )
     }
@@ -142,8 +144,29 @@ final class AppStateTests: XCTestCase {
         state.recordHotkeyRegistration(id: "toggle", failure: nil)
         XCTAssertNil(state.hotkeyRegistrationFailures["toggle"])
         XCTAssertEqual(
-            state.hotkeyRegistrationFailures["module.clock"], moduleFailure,
+            state.hotkeyRegistrationFailures["module.clock"],
+            moduleFailure,
             "clearing one shortcut's failure must not touch another's"
         )
+    }
+
+    func testHotkeyRebindWithoutCoordinatorFailsClosedAndDoesNotPersist() {
+        PreferenceStoreTestIsolation.withIsolatedStore {
+            let state = AppState()
+            let original = state.hotkey
+            let candidate = NookHotkey(
+                keyCode: 13,
+                carbonModifiers: 2048,
+                keySymbol: "W"
+            )
+
+            let result = state.requestHotkeyRebind(candidate)
+
+            guard case .rejected = result else {
+                return XCTFail("an unattached AppState cannot verify a Carbon registration")
+            }
+            XCTAssertEqual(state.hotkey, original)
+            XCTAssertNil(NookPreferenceStorage.defaults.data(forKey: "opennook.hotkey.v1"))
+        }
     }
 }

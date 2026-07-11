@@ -8,8 +8,8 @@
 import SwiftUI
 
 /// Settings row for the global show/hide hotkey. Tap the shortcut to record a new one:
-/// the next modifier + key combination is captured, persisted via `AppState`, and
-/// re-registered live by `AppCoordinator`. Escape cancels.
+/// the next modifier + key combination is validated and registered by `AppCoordinator`,
+/// then persisted via `AppState`. Escape cancels without changing the active shortcut.
 struct SettingsShortcutRow: View {
     @ObservedObject var appState: AppState
     @StateObject private var recorder: NookHotkeyRecorder
@@ -35,14 +35,20 @@ struct SettingsShortcutRow: View {
                 Text("Show \(branding.hostName)")
                     .font(typography.settingsRowTitle)
                     .foregroundStyle(theme.primaryLabel.opacity(metrics.settingsTitleEmphasisOpacity))
-                if let failure = appState.globalHotkeyRegistrationFailure {
+                if let feedbackMessage = recorder.feedbackMessage {
+                    Text(feedbackMessage)
+                        .font(typography.settingsHint)
+                        .foregroundStyle(Color.orange)
+                } else if let failure = appState.globalHotkeyRegistrationFailure {
                     Text(failure.message)
                         .font(typography.settingsHint)
                         .foregroundStyle(Color.orange)
                 } else {
-                    Text(recorder.isRecording ? "Press a shortcut — Esc to cancel" : "Global shortcut — click to change")
-                        .font(typography.settingsHint)
-                        .foregroundStyle(theme.tertiaryLabel)
+                    Text(
+                        recorder.isRecording ? "Press a shortcut — Esc to cancel" : "Global shortcut — click to change"
+                    )
+                    .font(typography.settingsHint)
+                    .foregroundStyle(theme.tertiaryLabel)
                 }
             }
 

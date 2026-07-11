@@ -109,4 +109,8 @@ enum NookDisplayStore {
             NookPreferenceStorage.defaults.set(data, forKey: defaultsKey)
         }
     }
+
+    static func clear() {
+        NookPreferenceStorage.defaults.removeObject(forKey: defaultsKey)
+    }
 }

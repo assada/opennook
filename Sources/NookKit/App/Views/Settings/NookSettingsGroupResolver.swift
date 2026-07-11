@@ -2,6 +2,40 @@
 // Copyright (c) 2026 Glendon Chin
 
 extension NookBuiltInSettingsConfiguration {
+    /// Resolves the disclosure state for a newly-created Settings surface. An explicit
+    /// set, including an empty one, is authoritative. Otherwise open the first group that
+    /// actually declares content instead of assuming the default `Appearance` group is
+    /// present after host filtering/composition.
+    func resolvedInitiallyExpandedGroupIDs(
+        hostSections: [NookSettingsSection]
+    ) -> Set<String> {
+        if let initiallyExpandedGroupIDs {
+            return initiallyExpandedGroupIDs
+        }
+
+        guard
+            let firstGroup = resolvedGroups(hostSections: hostSections)
+                .first(where: { groupHasVisibleContent($0, hostSections: hostSections) })
+        else {
+            return []
+        }
+        return [firstGroup.id]
+    }
+
+    private func groupHasVisibleContent(
+        _ group: NookSettingsGroup,
+        hostSections: [NookSettingsSection]
+    ) -> Bool {
+        group.items.contains { item in
+            switch item {
+                case .builtIn(let item):
+                    shows(item)
+                case .hostSection(let id):
+                    hostSections.contains(where: { $0.id == id })
+            }
+        }
+    }
+
     func resolvedGroups(hostSections: [NookSettingsSection]) -> [NookSettingsGroup] {
         if let groups {
             return groups
@@ -27,13 +61,15 @@ extension NookBuiltInSettingsConfiguration {
             items: [.statusBannerPreview, .resetAllSettings],
             to: &result
         )
-        result.append(contentsOf: hostSections.map { section in
-            NookSettingsGroup(
-                id: section.id,
-                title: section.title,
-                items: [.hostSection(section.id)]
-            )
-        })
+        result.append(
+            contentsOf: hostSections.map { section in
+                NookSettingsGroup(
+                    id: section.id,
+                    title: section.title,
+                    items: [.hostSection(section.id)]
+                )
+            }
+        )
         appendGroup(id: "About", title: "About", items: [.about], to: &result)
         return result
     }

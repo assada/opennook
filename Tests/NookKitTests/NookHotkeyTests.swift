@@ -7,6 +7,7 @@
 
 import Carbon
 import XCTest
+
 @testable import NookKit
 
 final class NookHotkeyTests: XCTestCase {
@@ -51,5 +52,34 @@ final class NookHotkeyTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(NookHotkey.self, from: data)
         XCTAssertEqual(decoded, original)
+    }
+
+    func testRecorderValidationRejectsNativeMenuConflicts() {
+        let reserved: [(UInt32, String, String)] = [
+            (UInt32(kVK_ANSI_Q), "Q", "Quit"),
+            (UInt32(kVK_ANSI_Comma), ",", "Settings"),
+            (UInt32(kVK_ANSI_K), "K", "Stay Expanded"),
+        ]
+
+        for (keyCode, symbol, command) in reserved {
+            let hotkey = NookHotkey(
+                keyCode: keyCode,
+                carbonModifiers: UInt32(cmdKey),
+                keySymbol: symbol
+            )
+            XCTAssertTrue(
+                NookHotkeyValidation.rejectionMessage(for: hotkey)?.contains(command) == true
+            )
+        }
+    }
+
+    func testRecorderValidationAllowsModifiedVariantsThatDoNotCollideWithMenu() {
+        let hotkey = NookHotkey(
+            keyCode: UInt32(kVK_ANSI_Q),
+            carbonModifiers: UInt32(cmdKey | optionKey),
+            keySymbol: "Q"
+        )
+
+        XCTAssertNil(NookHotkeyValidation.rejectionMessage(for: hotkey))
     }
 }

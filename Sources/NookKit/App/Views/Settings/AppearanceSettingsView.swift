@@ -84,7 +84,11 @@ public struct NookAppearanceSettingsSection: View {
                     Text("Accent")
                         .font(typography.settingsFieldLabel)
                         .foregroundStyle(theme.secondaryLabel)
-                    HStack(spacing: metrics.settingsInlineSpacing) {
+                    LazyVGrid(
+                        columns: accentGridColumns,
+                        alignment: .leading,
+                        spacing: metrics.settingsInlineSpacing
+                    ) {
                         ForEach(NookAccentPreset.allCases) { preset in
                             Button {
                                 var prefs = appState.appearancePreferences
@@ -103,7 +107,7 @@ public struct NookAppearanceSettingsSection: View {
                                                 accentRingColor(for: preset),
                                                 lineWidth: metrics.settingsAccentSwatchStrokeWidth
                                             )
-                                        )
+                                    )
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(preset.displayName)
@@ -113,7 +117,8 @@ public struct NookAppearanceSettingsSection: View {
             }
 
             if configuration.shows(.backdropStrength),
-               appState.appearancePreferences.surfaceStyle != .solid {
+                appState.appearancePreferences.surfaceStyle != .solid
+            {
                 VStack(alignment: .leading, spacing: metrics.settingsFieldSpacing) {
                     Text(strengthLabel)
                         .font(typography.settingsFieldLabel)
@@ -140,6 +145,21 @@ public struct NookAppearanceSettingsSection: View {
                 return "Liquid Glass refracts the wallpaper through Apple's glass material on macOS 26, "
                     + "with a frosted-glass fallback on earlier versions."
         }
+    }
+
+    /// Keeps all core accent choices directly available while reflowing the row at
+    /// narrower host-configured expanded widths.
+    private var accentGridColumns: [GridItem] {
+        [
+            GridItem(
+                .adaptive(
+                    minimum: metrics.settingsAccentSwatchSize,
+                    maximum: metrics.settingsAccentSwatchSize
+                ),
+                spacing: metrics.settingsInlineSpacing,
+                alignment: .leading
+            )
+        ]
     }
 
     private var strengthLabel: String {

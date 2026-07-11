@@ -22,7 +22,7 @@ public enum NookEscapeBehavior: Sendable {
 /// hover side-effects, the cold-launch greeting, and how appearance preferences map to
 /// the surface backdrop.
 ///
-/// These are distinct from ``NookConfiguration``'s per-surface content/theme seams - 
+/// These are distinct from ``NookConfiguration``'s per-surface content/theme seams -
 /// they describe how the single shared notch surface *behaves*, so they live at the
 /// host-process level (``NookHostConfiguration/chromeBehavior``). The single-module path
 /// mirrors them on ``NookConfiguration/chromeBehavior`` and forwards onto the synthesized

@@ -37,72 +37,73 @@ struct SettingsGroupContent: View {
     @ViewBuilder
     private func groupItem(_ item: NookSettingsGroupItem) -> some View {
         switch item {
-        case let .builtIn(item) where configuration.shows(item):
-            builtInItem(item)
-        case let .hostSection(id):
-            if let section = hostSections.first(where: { $0.id == id }) {
-                section.content()
-            }
-        case .builtIn:
-            EmptyView()
+            case .builtIn(let item) where configuration.shows(item):
+                builtInItem(item)
+            case .hostSection(let id):
+                if let section = hostSections.first(where: { $0.id == id }) {
+                    section.content()
+                }
+            case .builtIn:
+                EmptyView()
         }
     }
 
     @ViewBuilder
     private func builtInItem(_ item: NookBuiltInSettingsItem) -> some View {
         switch item {
-        case .theme, .surface, .layout, .accent, .backdropStrength:
-            NookAppearanceSettingsSection(
-                appState: appState,
-                configuration: configurationShowingOnly(item)
-            )
-        case .display:
-            DisplaySettingsSection(appState: appState)
-        case .globalShortcut:
-            SettingsShortcutRow(appState: appState)
-            if !appState.hotkeyRegistrationFailures.keys
-                .filter({ $0 != NookHotkeyIDs.toggle }).isEmpty {
-                SettingsHotkeyFailureRow(appState: appState)
-            }
-        case .stayExpanded:
-            SettingActionLine(
-                icon: appState.keepNookOpen ? "pin.fill" : "pin",
-                title: "Keep open",
-                detail: appState.keepNookOpen
-                    ? "On — stays open after the pointer leaves"
-                    : "Off — closes when the pointer leaves",
-                accent: theme.accent,
-                action: onToggleKeepOpen
-            )
-        case .hapticFeedback:
-            SettingActionLine(
-                icon: appState.appearancePreferences.hapticFeedbackEnabled
-                    ? "hand.tap.fill" : "hand.tap",
-                title: "Haptic feedback",
-                detail: appState.appearancePreferences.hapticFeedbackEnabled
-                    ? "On — trackpad pulse on confirmation"
-                    : "Off — silent confirmation",
-                accent: theme.accent,
-                action: toggleHapticFeedback
-            )
-        case .statusBannerPreview:
-            SettingsDataCommandRow(
-                title: "Preview status banner",
-                subtitle: "Shows the transient message channel under the top bar",
-                icon: "text.bubble",
-                style: .standard,
-                action: previewStatusBanner
-            )
-        case .resetAllSettings:
-            SettingsDataCommandRow(
-                title: "Reset preferences…",
-                subtitle: "Return appearance, shortcuts, and app preferences to defaults",
-                icon: "arrow.counterclockwise",
-                style: .standard,
-                action: { showsResetConfirmation = true }
-            )
-        case .about:
-            SettingsAboutCard()
+            case .theme, .surface, .layout, .accent, .backdropStrength:
+                NookAppearanceSettingsSection(
+                    appState: appState,
+                    configuration: configurationShowingOnly(item)
+                )
+            case .display:
+                DisplaySettingsSection(appState: appState)
+            case .globalShortcut:
+                SettingsShortcutRow(appState: appState)
+                if !appState.hotkeyRegistrationFailures.keys
+                    .filter({ $0 != NookHotkeyIDs.toggle }).isEmpty
+                {
+                    SettingsHotkeyFailureRow(appState: appState)
+                }
+            case .stayExpanded:
+                SettingActionLine(
+                    icon: appState.keepNookOpen ? "pin.fill" : "pin",
+                    title: "Keep open",
+                    detail: appState.keepNookOpen
+                        ? "On — stays open after the pointer leaves"
+                        : "Off — closes when the pointer leaves",
+                    accent: theme.accent,
+                    action: onToggleKeepOpen
+                )
+            case .hapticFeedback:
+                SettingActionLine(
+                    icon: appState.appearancePreferences.hapticFeedbackEnabled
+                        ? "hand.tap.fill" : "hand.tap",
+                    title: "Haptic feedback",
+                    detail: appState.appearancePreferences.hapticFeedbackEnabled
+                        ? "On — trackpad pulse on confirmation"
+                        : "Off — silent confirmation",
+                    accent: theme.accent,
+                    action: toggleHapticFeedback
+                )
+            case .statusBannerPreview:
+                SettingsDataCommandRow(
+                    title: "Preview status banner",
+                    subtitle: "Shows the transient message channel under the top bar",
+                    icon: "text.bubble",
+                    style: .standard,
+                    action: previewStatusBanner
+                )
+            case .resetAllSettings:
+                SettingsDataCommandRow(
+                    title: "Reset preferences…",
+                    subtitle: "Return appearance, shortcuts, and app preferences to defaults",
+                    icon: "arrow.counterclockwise",
+                    style: .standard,
+                    action: { showsResetConfirmation = true }
+                )
+            case .about:
+                SettingsAboutCard()
         }
     }
 

@@ -67,8 +67,8 @@ public struct NookBuiltInSettingsConfiguration: Sendable {
     /// Appearance, Display, Shortcut & nook, Data, host-section, About order.
     public var groups: [NookSettingsGroup]?
 
-    /// Disclosure ids open when Settings is first constructed. `nil` preserves the
-    /// framework default (`Appearance`); an empty set starts with every group collapsed.
+    /// Disclosure ids open when Settings is first constructed. `nil` opens the first
+    /// resolved group with visible content; an empty set starts with every group collapsed.
     public var initiallyExpandedGroupIDs: Set<String>?
 
     /// Runs after OpenNook resets its own appearance, display, and shortcut preferences.

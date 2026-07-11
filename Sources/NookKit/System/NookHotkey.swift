@@ -52,28 +52,28 @@ public struct NookHotkey: Equatable, Codable, Sendable {
     /// control characters AppKit expects; printable keys are normalized to lowercase.
     public var menuKeyEquivalent: String {
         switch keySymbol {
-        case "Space": " "
-        case "↩": "\r"
-        case "⇥": "\t"
-        case "⌫": "\u{8}"
-        case "⌦": "\u{7F}"
-        case "←": "\u{F702}"
-        case "→": "\u{F703}"
-        case "↓": "\u{F701}"
-        case "↑": "\u{F700}"
-        case "F1": "\u{F704}"
-        case "F2": "\u{F705}"
-        case "F3": "\u{F706}"
-        case "F4": "\u{F707}"
-        case "F5": "\u{F708}"
-        case "F6": "\u{F709}"
-        case "F7": "\u{F70A}"
-        case "F8": "\u{F70B}"
-        case "F9": "\u{F70C}"
-        case "F10": "\u{F70D}"
-        case "F11": "\u{F70E}"
-        case "F12": "\u{F70F}"
-        default: keySymbol.lowercased()
+            case "Space": " "
+            case "↩": "\r"
+            case "⇥": "\t"
+            case "⌫": "\u{8}"
+            case "⌦": "\u{7F}"
+            case "←": "\u{F702}"
+            case "→": "\u{F703}"
+            case "↓": "\u{F701}"
+            case "↑": "\u{F700}"
+            case "F1": "\u{F704}"
+            case "F2": "\u{F705}"
+            case "F3": "\u{F706}"
+            case "F4": "\u{F707}"
+            case "F5": "\u{F708}"
+            case "F6": "\u{F709}"
+            case "F7": "\u{F70A}"
+            case "F8": "\u{F70B}"
+            case "F9": "\u{F70C}"
+            case "F10": "\u{F70D}"
+            case "F11": "\u{F70E}"
+            case "F12": "\u{F70F}"
+            default: keySymbol.lowercased()
         }
     }
 
@@ -155,5 +155,9 @@ enum NookHotkeyStore {
         if let data = try? JSONEncoder().encode(hotkey) {
             NookPreferenceStorage.defaults.set(data, forKey: defaultsKey)
         }
+    }
+
+    static func clear() {
+        NookPreferenceStorage.defaults.removeObject(forKey: defaultsKey)
     }
 }

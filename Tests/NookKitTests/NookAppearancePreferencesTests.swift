@@ -7,6 +7,7 @@
 
 import NookSurface
 import XCTest
+
 @testable import NookKit
 
 final class NookAppearancePreferencesTests: XCTestCase {
@@ -55,7 +56,7 @@ final class NookAppearancePreferencesTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
-    /// The Liquid Glass surface style must survive a JSON round-trip like any other - 
+    /// The Liquid Glass surface style must survive a JSON round-trip like any other -
     /// its raw value is the seam a saved preference is restored through.
     func testLiquidGlassSurfaceStyleRoundTripsThroughJSON() throws {
         let original = NookAppearancePreferences(surfaceStyle: .liquidGlass)
@@ -73,9 +74,9 @@ final class NookAppearancePreferencesTests: XCTestCase {
         let decoded = try JSONDecoder().decode(NookAppearancePreferences.self, from: data)
 
         XCTAssertEqual(decoded.chromePalette, .dark)
-        XCTAssertEqual(decoded.surfaceStyle, .solid)    // default
-        XCTAssertEqual(decoded.presentation, .auto)     // default
-        XCTAssertFalse(decoded.hapticFeedbackEnabled)   // default
-        XCTAssertFalse(decoded.keepNookOpen)            // default
+        XCTAssertEqual(decoded.surfaceStyle, .solid)  // default
+        XCTAssertEqual(decoded.presentation, .auto)  // default
+        XCTAssertFalse(decoded.hapticFeedbackEnabled)  // default
+        XCTAssertFalse(decoded.keepNookOpen)  // default
     }
 }

@@ -7,6 +7,7 @@
 
 import Carbon
 import XCTest
+
 @testable import NookKit
 
 /// Bookkeeping coverage for ``HotkeyController``. The Carbon-level
@@ -18,6 +19,11 @@ import XCTest
 /// `AppCoordinatorTests`' real hotkey registration.
 @MainActor
 final class HotkeyControllerTests: XCTestCase {
+    private final class FireCounts: @unchecked Sendable {
+        var old = 0
+        var new = 0
+    }
+
     /// Carbon key code for "F19" - a function key that almost certainly isn't bound,
     /// and is unlikely to fire while tests run.
     private let f19KeyCode: UInt32 = 80
@@ -50,11 +56,13 @@ final class HotkeyControllerTests: XCTestCase {
         let secondMinted = controller.carbonIDsMintedForTesting
 
         XCTAssertEqual(
-            controller.registeredIDsForTesting, ["toggle"],
+            controller.registeredIDsForTesting,
+            ["toggle"],
             "the same id stays a single registration"
         )
         XCTAssertGreaterThan(
-            secondMinted, firstMinted,
+            secondMinted,
+            firstMinted,
             "re-registering must mint a fresh Carbon id, not reuse the prior one"
         )
     }
@@ -63,19 +71,53 @@ final class HotkeyControllerTests: XCTestCase {
     /// from the previous registration cannot fire under the same id.
     func testRegisterReplacingSameIDReplacesDispatchedHandler() {
         let controller = HotkeyController()
-        var oldFireCount = 0
-        var newFireCount = 0
+        let counts = FireCounts()
 
         _ = controller.register("toggle", keyCode: f19KeyCode, modifiers: UInt32(cmdKey)) {
-            oldFireCount += 1
+            counts.old += 1
         }
+        let minted = controller.carbonIDsMintedForTesting
         _ = controller.register("toggle", keyCode: f19KeyCode, modifiers: UInt32(cmdKey)) {
-            newFireCount += 1
+            counts.new += 1
         }
 
         XCTAssertTrue(controller.fireForTesting(id: "toggle"))
-        XCTAssertEqual(oldFireCount, 0, "the prior handler must NOT fire after replacement")
-        XCTAssertEqual(newFireCount, 1, "the new handler is what runs")
+        XCTAssertEqual(counts.old, 0, "the prior handler must NOT fire after replacement")
+        XCTAssertEqual(counts.new, 1, "the new handler is what runs")
+        XCTAssertEqual(
+            controller.carbonIDsMintedForTesting,
+            minted,
+            "the same combination updates its handler without a Carbon registration gap"
+        )
+    }
+
+    /// Carbon rejecting a candidate must not tear down the known-working registration.
+    func testFailedReplacementPreservesExistingRegistrationAndHandler() {
+        let controller = HotkeyController()
+        let counts = FireCounts()
+        XCTAssertEqual(
+            controller.register("toggle", keyCode: f19KeyCode, modifiers: UInt32(cmdKey)) {
+                counts.old += 1
+            },
+            noErr
+        )
+        XCTAssertEqual(
+            controller.register("occupied", keyCode: f20KeyCode, modifiers: UInt32(cmdKey)) {},
+            noErr
+        )
+
+        let status = controller.register(
+            "toggle",
+            keyCode: f20KeyCode,
+            modifiers: UInt32(cmdKey)
+        ) {
+            counts.new += 1
+        }
+
+        XCTAssertNotEqual(status, noErr, "the occupied candidate is rejected by Carbon")
+        XCTAssertTrue(controller.fireForTesting(id: "toggle"))
+        XCTAssertEqual(counts.old, 1, "the original handler remains active after rejection")
+        XCTAssertEqual(counts.new, 0)
     }
 
     func testUnregisterDropsTheID() {

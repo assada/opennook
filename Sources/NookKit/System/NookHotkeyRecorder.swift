@@ -16,9 +16,13 @@ import Combine
 @MainActor
 public final class NookHotkeyRecorder: ObservableObject {
     @Published public private(set) var isRecording = false
+    /// Inline, recoverable feedback for the latest rejected key combination. Cleared
+    /// when a new recording session starts or a candidate succeeds.
+    @Published public private(set) var feedbackMessage: String?
 
+    private static weak var activeRecorder: NookHotkeyRecorder?
     private weak var appState: AppState?
-    private var eventMonitor: Any?
+    private var recordingLease: NookHotkeyRecordingLease?
 
     public init(appState: AppState) {
         self.appState = appState
@@ -31,22 +35,42 @@ public final class NookHotkeyRecorder: ObservableObject {
     public func start() {
         guard !isRecording, appState != nil else { return }
 
+        // A host can expose the public recorder in onboarding as well as Settings.
+        // Only one process-wide monitor may own capture and suspension at a time.
+        Self.activeRecorder?.stop()
+        Self.activeRecorder = self
+        feedbackMessage = nil
         isRecording = true
-        appState?.isRecordingHotkey = true
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handle(event) ?? event
+        guard let appState else { return }
+        appState.isRecordingHotkey = true
+        guard
+            let monitor = NSEvent.addLocalMonitorForEvents(
+                matching: .keyDown,
+                handler: { [weak self] event in
+                    self?.handle(event) ?? event
+                }
+            )
+        else {
+            isRecording = false
+            Self.activeRecorder = nil
+            appState.isRecordingHotkey = false
+            feedbackMessage = "Shortcut recording is unavailable. Try again."
+            return
         }
+        recordingLease = NookHotkeyRecordingLease(monitor: monitor, appState: appState)
     }
 
     public func stop() {
-        if let eventMonitor {
-            NSEvent.removeMonitor(eventMonitor)
-        }
-        eventMonitor = nil
+        let ownsActiveSession = Self.activeRecorder === self
+        recordingLease?.invalidate()
+        recordingLease = nil
+        feedbackMessage = nil
 
         guard isRecording else { return }
         isRecording = false
-        appState?.isRecordingHotkey = false
+        if ownsActiveSession {
+            Self.activeRecorder = nil
+        }
     }
 
     private func handle(_ event: NSEvent) -> NSEvent? {
@@ -58,12 +82,24 @@ public final class NookHotkeyRecorder: ObservableObject {
         }
 
         guard let hotkey = NookHotkey(event: event) else {
-            // Swallow partial or unsupported combinations while the recorder is active.
+            feedbackMessage = "Use Command, Option, or Control with a supported key."
             return nil
         }
 
-        appState?.replaceHotkey(hotkey)
-        stop()
+        if let rejection = NookHotkeyValidation.rejectionMessage(for: hotkey) {
+            feedbackMessage = rejection
+            return nil
+        }
+
+        switch appState?.requestHotkeyRebind(hotkey) {
+            case .accepted:
+                feedbackMessage = nil
+                stop()
+            case .rejected(let message):
+                feedbackMessage = message
+            case nil:
+                feedbackMessage = "The shortcut service is unavailable. Try again."
+        }
         return nil
     }
 }

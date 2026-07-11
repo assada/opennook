@@ -203,33 +203,40 @@ public final class AppCoordinator: ObservableObject {
     ) -> Nook<AnyView, AnyView, AnyView> {
         let nook = Nook<AnyView, AnyView, AnyView>(
             hoverBehavior: moduleHost.chromeBehavior.hoverBehavior,
-            style: moduleHost.configuration.style ?? NookStyle(
-                topCornerRadius: NookAppearance.expandedTopCornerRadius,
-                bottomCornerRadius: NookAppearance.expandedBottomCornerRadius
-            ),
+            style: moduleHost.configuration.style
+                ?? NookStyle(
+                    topCornerRadius: NookAppearance.expandedTopCornerRadius,
+                    bottomCornerRadius: NookAppearance.expandedBottomCornerRadius
+                ),
             expanded: {
-                AnyView(ModuleRouterExpandedView(
-                    moduleHost: moduleHost,
-                    appState: appState,
-                    toggleKeepOpen: { coordinatorBox.coordinator?.toggleKeepNookOpen() },
-                    hide: { coordinatorBox.coordinator?.handleEscapeCommand() },
-                    resetAllSettings: { coordinatorBox.coordinator?.resetAllSettingsToDefaults() },
-                    switchModule: { id in coordinatorBox.coordinator?.switchModule(to: id) }
-                ))
+                AnyView(
+                    ModuleRouterExpandedView(
+                        moduleHost: moduleHost,
+                        appState: appState,
+                        toggleKeepOpen: { coordinatorBox.coordinator?.toggleKeepNookOpen() },
+                        hide: { coordinatorBox.coordinator?.handleEscapeCommand() },
+                        resetAllSettings: { coordinatorBox.coordinator?.resetAllSettingsToDefaults() },
+                        switchModule: { id in coordinatorBox.coordinator?.switchModule(to: id) }
+                    )
+                )
             },
             compactLeading: {
-                AnyView(ModuleRouterCompactView(
-                    moduleHost: moduleHost,
-                    appState: appState,
-                    slot: .leading
-                ))
+                AnyView(
+                    ModuleRouterCompactView(
+                        moduleHost: moduleHost,
+                        appState: appState,
+                        slot: .leading
+                    )
+                )
             },
             compactTrailing: {
-                AnyView(ModuleRouterCompactView(
-                    moduleHost: moduleHost,
-                    appState: appState,
-                    slot: .trailing
-                ))
+                AnyView(
+                    ModuleRouterCompactView(
+                        moduleHost: moduleHost,
+                        appState: appState,
+                        slot: .trailing
+                    )
+                )
             }
         )
 
@@ -298,11 +305,13 @@ public final class AppCoordinator: ObservableObject {
         self.moduleHost = moduleHost
 
         let coordinatorBox = CoordinatorBox()
-        self.surface = surface ?? AppCoordinator.makeDefaultNook(
-            moduleHost: moduleHost,
-            appState: appState,
-            coordinatorBox: coordinatorBox
-        )
+        self.surface =
+            surface
+            ?? AppCoordinator.makeDefaultNook(
+                moduleHost: moduleHost,
+                appState: appState,
+                coordinatorBox: coordinatorBox
+            )
 
         bindBackdropSynchronization()
         // Bind the surface-state mirror at init, not at start: it is pure observation
@@ -317,6 +326,12 @@ public final class AppCoordinator: ObservableObject {
         bindPresentationPinning()
 
         coordinatorBox.coordinator = self
+        appState.installHotkeyRebindHandler { [weak self] candidate in
+            guard let self else {
+                return .rejected(message: "The shortcut service is unavailable. Try again.")
+            }
+            return self.rebindGlobalHotkey(to: candidate)
+        }
         // Project the active module's lifecycle callbacks onto the surface. The hooks
         // fire on the surface's own state transitions, so hover- and drag-driven changes
         // reach the host too - not just coordinator-initiated show/hide. `performSwitch`
@@ -332,7 +347,7 @@ public final class AppCoordinator: ObservableObject {
 
     /// Brings the coordinator online: sets the activation policy, syncs the chrome
     /// backdrop, registers global hotkeys, installs the surface bindings, plays the
-    /// cold-launch shimmer, and fires the active module's `onReady`. Idempotent - 
+    /// cold-launch shimmer, and fires the active module's `onReady`. Idempotent -
     /// safe to call more than once.
     public func start() {
         guard !hasStarted else { return }
@@ -480,7 +495,7 @@ public final class AppCoordinator: ObservableObject {
         guard moduleHost.registry.isLoaded(outgoingID) else { return }
         enqueueSwitchTail { [weak self] in
             guard let self,
-                  let outgoingModule = self.moduleHost.registry.module(for: outgoingID)
+                let outgoingModule = self.moduleHost.registry.module(for: outgoingID)
             else { return }
             await Self.runWithTimeout(Self.switchAwayTimeout, label: "prepareForSwitchAway[\(outgoingID)]") {
                 await outgoingModule.prepareForSwitchAway()
@@ -511,20 +526,9 @@ public final class AppCoordinator: ObservableObject {
         label: String,
         _ work: @escaping @MainActor @Sendable () async -> Void
     ) async {
-        let workTask = Task { @MainActor in await work() }
-        let timerTask = Task<Bool, Never> {
-            (try? await Task.sleep(for: timeout)) != nil
-        }
-        await withTaskGroup(of: Bool.self) { group in
-            group.addTask { await workTask.value; return false }
-            group.addTask { await timerTask.value }
-            if let timedOut = await group.next(), timedOut {
-                workTask.cancel()
-                print("[OpenNook] \(label) exceeded \(timeout); cancelled")
-            } else {
-                timerTask.cancel()
-            }
-            group.cancelAll()
+        let outcome = await TaskDeadlineRace().run(timeout: timeout, work: work)
+        if case .timedOut = outcome {
+            print("[OpenNook] \(label) exceeded \(timeout); cancellation requested")
         }
     }
 
@@ -619,8 +623,9 @@ public final class AppCoordinator: ObservableObject {
 
     /// Registers the current `appState.hotkey` as the global show/hide shortcut.
     /// Skipped while the user is mid-recording so the old shortcut can't fire.
-    func registerGlobalHotkey() {
-        guard !appState.isRecordingHotkey else { return }
+    @discardableResult
+    func registerGlobalHotkey() -> OSStatus {
+        guard !appState.isRecordingHotkey else { return noErr }
 
         let hotkey = appState.hotkey
         let status = hotkeyController.register(
@@ -629,7 +634,8 @@ public final class AppCoordinator: ObservableObject {
             modifiers: hotkey.carbonModifiers
         ) { [weak self] in
             Task { @MainActor in
-                self?.toggleNook()
+                guard let self, !self.appState.isRecordingHotkey else { return }
+                self.toggleNook()
             }
         }
         // Record the CURRENT outcome on the durable failure channel: a failure stays
@@ -640,6 +646,35 @@ public final class AppCoordinator: ObservableObject {
             shortcutName: "Show \(moduleHost.branding.hostName)",
             hotkey: hotkey
         )
+        return status
+    }
+
+    /// Attempts a recorded hotkey as a transaction: Carbon must accept the candidate
+    /// before `AppState` publishes or persists it. `HotkeyController.register` preserves
+    /// the old binding on failure, so Settings and the native menu remain aligned with
+    /// the shortcut that is actually active.
+    private func rebindGlobalHotkey(to candidate: NookHotkey) -> HotkeyRebindResult {
+        guard candidate != appState.hotkey else { return .accepted }
+
+        let status = hotkeyController.register(
+            Self.toggleHotkeyID,
+            keyCode: candidate.keyCode,
+            modifiers: candidate.carbonModifiers
+        ) { [weak self] in
+            Task { @MainActor in
+                guard let self, !self.appState.isRecordingHotkey else { return }
+                self.toggleNook()
+            }
+        }
+        guard status == noErr else {
+            return .rejected(
+                message: "\(candidate.display) is unavailable. Choose another shortcut."
+            )
+        }
+
+        appState.replaceHotkey(candidate)
+        appState.recordHotkeyRegistration(id: Self.toggleHotkeyID, failure: nil)
+        return .accepted
     }
 
     /// Registers the static module shortcuts: a direct-jump key per module that declares
@@ -691,7 +726,8 @@ public final class AppCoordinator: ObservableObject {
         shortcutName: String,
         hotkey: NookHotkey
     ) {
-        let failure = status == noErr
+        let failure =
+            status == noErr
             ? nil
             : HotkeyRegistrationFailure(shortcutName: shortcutName, combination: hotkey.display)
         appState.recordHotkeyRegistration(id: id, failure: failure)
@@ -707,7 +743,7 @@ public final class AppCoordinator: ObservableObject {
     }
 
     /// Keeps the live hotkey registration in sync with `appState`: re-register when the
-    /// user picks a new shortcut, and suspend registration entirely while recording.
+    /// user picks a new shortcut, and make the existing handler inert while recording.
     ///
     /// `combineLatest` emits once per upstream `@Published` change. A user finishing
     /// recording flips both `$hotkey` (new value) and `$isRecordingHotkey` (false) on
@@ -732,10 +768,12 @@ public final class AppCoordinator: ObservableObject {
             .sink { [weak self] intent in
                 guard let self else { return }
                 switch intent {
-                case .suspended:
-                    self.hotkeyController.unregister(Self.toggleHotkeyID)
-                case .bound:
-                    self.registerGlobalHotkey()
+                    case .suspended:
+                        // Keep the old Carbon registration in place so a failed candidate
+                        // can roll back without a gap. Its handler is inert while recording.
+                        break
+                    case .bound:
+                        self.registerGlobalHotkey()
                 }
             }
             .store(in: &cancellables)
@@ -917,13 +955,13 @@ public final class AppCoordinator: ObservableObject {
     /// intentionally consume a key while another application owns focus.
     func handleEscapeCommand() {
         switch moduleHost.chromeBehavior.escapeBehavior {
-        case .compact:
-            compactNook()
-        case .dismiss:
-            dismissNook()
-        case .dismissWhenPointerOutside:
-            guard !surface.isHovering else { return }
-            dismissNook()
+            case .compact:
+                compactNook()
+            case .dismiss:
+                dismissNook()
+            case .dismissWhenPointerOutside:
+                guard !surface.isHovering else { return }
+                dismissNook()
         }
     }
 
@@ -966,19 +1004,31 @@ public final class AppCoordinator: ObservableObject {
 
     // MARK: - Reset
 
-    /// Restores appearance prefs, the global hotkey, and the display preference to their
-    /// defaults. Every reset routes through `AppState`'s guarded `replace...` path, so
-    /// persistence and observers fire exactly once per preference, in one pattern - no
-    /// direct `appearancePreferences` assignment plus manual `NookAppearanceStore.save`.
+    /// Restores appearance prefs, the global hotkey, and the display preference to the
+    /// host defaults captured at launch. Reset clears persisted overrides instead of
+    /// saving the seed back as a user choice, so future host-default revisions still
+    /// reach users who reset. The hotkey override is cleared only after Carbon accepts
+    /// the host candidate; a failed registration preserves the known-working binding.
     ///
     /// `staysExpandedOnHoverExit` is then projected from the freshly reset preference
     /// rather than a hardcoded `false`: the value comes from `appState.keepNookOpen`
     /// (which reads `appearancePreferences.keepNookOpen`), so there is no duplicated
     /// knowledge of what the default keep-open value is.
     public func resetAllSettingsToDefaults() {
-        appState.replaceAppearancePreferences(.default)
-        appState.replaceHotkey(.default)
-        appState.replaceDisplayPreference(.default)
+        let defaults = appState.preferenceDefaults
+        let resetHotkey: Bool
+        if defaults.hotkey == appState.hotkey {
+            resetHotkey = true
+        } else {
+            switch rebindGlobalHotkey(to: defaults.hotkey) {
+                case .accepted:
+                    resetHotkey = true
+                case .rejected(let message):
+                    resetHotkey = false
+                    appState.showStatus(message)
+            }
+        }
+        appState.resetPreferencesToHostDefaults(resetHotkey: resetHotkey)
         surface.staysExpandedOnHoverExit = appState.keepNookOpen
         syncNotchBackdrop()
     }

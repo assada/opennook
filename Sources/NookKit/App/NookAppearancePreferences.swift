@@ -150,4 +150,8 @@ enum NookAppearanceStore {
             // Best-effort persistence; ignore encode failures.
         }
     }
+
+    static func clear() {
+        NookPreferenceStorage.defaults.removeObject(forKey: defaultsKey)
+    }
 }

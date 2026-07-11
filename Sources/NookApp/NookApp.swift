@@ -7,12 +7,11 @@
 
 import AppKit
 import Combine
-import SwiftUI
-
 // Re-exported so a host app needs only `import NookApp` to reach the registration API
 // (`NookConfiguration`, `NookResolvedTheme`, `AppState`, ...) and the surface types.
 @_exported import NookKit
 @_exported import NookSurface
+import SwiftUI
 
 /// Library entry point shared by the SPM executable trampoline
 /// (`Sources/NookExecutable/main.swift`) and the Xcode app target's
@@ -173,17 +172,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         // - it's chrome-independent and is the only keep-open control left once the top
         // bar (and its lock) is hidden.
         if moduleHost.configuration.topBar.showsSettings {
-            menu.addItem(NSMenuItem(
-                title: "Settings…",
-                action: #selector(showSettings),
-                keyEquivalent: ","
-            ))
+            menu.addItem(
+                NSMenuItem(
+                    title: "Settings…",
+                    action: #selector(showSettings),
+                    keyEquivalent: ","
+                )
+            )
         }
-        menu.addItem(NSMenuItem(
-            title: "Toggle Stay Expanded",
-            action: #selector(toggleKeepOpen),
-            keyEquivalent: "k"
-        ))
+        menu.addItem(
+            NSMenuItem(
+                title: "Toggle Stay Expanded",
+                action: #selector(toggleKeepOpen),
+                keyEquivalent: "k"
+            )
+        )
 
         // Modules - a multi-module host that left switching in the menu bar (the default
         // placement) gets a section here: one item per module, a check on the active one,
@@ -208,13 +211,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(
-            title: "Quit",
-            action: #selector(quit),
-            keyEquivalent: "q"
-        ))
+        menu.addItem(
+            NSMenuItem(
+                title: "Quit",
+                action: #selector(quit),
+                keyEquivalent: "q"
+            )
+        )
 
-        menu.items.forEach { $0.target = self }
+        for item in menu.items {
+            item.target = self
+        }
         statusItem.menu = menu
     }
 
