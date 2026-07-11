@@ -25,7 +25,7 @@ public enum NookViewMode: Equatable, Sendable {
 public struct HotkeyRegistrationFailure: Equatable, Sendable {
     /// Human-readable name of the shortcut, e.g. `"Show Nook"` or a module's display name.
     public let shortcutName: String
-    /// The key combination that failed to register, e.g. `"⌥⌘;"`.
+    /// The key combination that failed to register, e.g. `"⌥Space"`.
     public let combination: String
 
     public init(shortcutName: String, combination: String) {
@@ -39,6 +39,14 @@ public struct HotkeyRegistrationFailure: Equatable, Sendable {
     }
 }
 
+/// Result of asking the live coordinator to replace the global hotkey. Kept internal:
+/// recording surfaces turn a rejection into inline feedback, while callers that set a
+/// host launch default continue to use ``NookPreferenceDefaults``.
+enum HotkeyRebindResult: Equatable {
+    case accepted
+    case rejected(message: String)
+}
+
 /// Mutable, observable state shared between the coordinator and views.
 /// Holds chrome-level concerns (view mode, appearance, keep-open, visibility) - product
 /// data lives in whatever model layer a downstream fork adds on top.
@@ -48,6 +56,11 @@ public struct HotkeyRegistrationFailure: Equatable, Sendable {
 /// here (simplest), or hold product state in its own type reachable via ``AppServices``
 /// (better separation, scales across multi-module hosts).
 public final class AppState: ObservableObject {
+    /// The host's effective preference defaults captured at launch. Persisted user
+    /// choices still win during initialization; Settings Reset returns to this bag
+    /// rather than silently substituting the framework defaults.
+    public let preferenceDefaults: NookPreferenceDefaults
+
     /// Which framework chrome screen the expanded surface is showing. Written via
     /// ``showHome()``/``showSettings()``; observed by `NookExpandedView`.
     @Published public private(set) var viewMode: NookViewMode = .home
@@ -120,6 +133,12 @@ public final class AppState: ObservableObject {
     /// outcome of its registration - not a last-writer-wins shared string.
     @Published public internal(set) var hotkeyRegistrationFailures: [String: HotkeyRegistrationFailure] = [:]
 
+    /// Registration failure for the user-configurable global show/hide shortcut.
+    /// Host onboarding can surface this without depending on OpenNook's internal id.
+    public var globalHotkeyRegistrationFailure: HotkeyRegistrationFailure? {
+        hotkeyRegistrationFailures[NookHotkeyIDs.toggle]
+    }
+
     /// Records the outcome of one hotkey registration attempt: `failure` non-nil keeps
     /// the entry, `nil` clears it. Called by the coordinator after every (re-)register.
     func recordHotkeyRegistration(id: String, failure: HotkeyRegistrationFailure?) {
@@ -135,6 +154,11 @@ public final class AppState: ObservableObject {
     /// fire mid-capture.
     @Published public var isRecordingHotkey = false
 
+    /// Installed by ``AppCoordinator`` so a recorder can ask Carbon to accept a
+    /// candidate before changing observable/persisted state. The weak coordinator
+    /// capture used by the installer avoids introducing an AppState/coordinator cycle.
+    private var hotkeyRebindHandler: ((NookHotkey) -> HotkeyRebindResult)?
+
     /// Mirrors `Nook.isDragInFlight`. `true` while a system file-drag session is over the
     /// panel - kept as a hook-point for downstream consumers that want drop targets.
     @Published public var isDragInFlight: Bool = false
@@ -145,10 +169,9 @@ public final class AppState: ObservableObject {
     /// - so the chrome reflects what the user is actually looking at, instead of
     /// the module's static name. Set to `nil` to clear.
     ///
-    /// The chrome treats this as a soft state hint: it doesn't affect ``viewMode``
-    /// or the back-to-home affordance. A module that wants the breadcrumb to be
-    /// clickable (e.g. "click to pop back one level") owns that interaction
-    /// inside its own surface - the chrome only renders the text.
+    /// The chrome treats this as a single drill-down level. Its leading control and
+    /// standard trackpad back gesture clear the breadcrumb; the module observes that
+    /// clear and pops its own route.
     @Published public var moduleBreadcrumb: String?
 
     /// Loads the persisted appearance, hotkey, and display preferences from
@@ -163,6 +186,7 @@ public final class AppState: ObservableObject {
     /// ``NookPreferenceDefaults`` for the seed semantics - the seed is never written
     /// here, so a persisted user choice always wins.
     public init(preferenceDefaults: NookPreferenceDefaults) {
+        self.preferenceDefaults = preferenceDefaults
         appearancePreferences = NookAppearanceStore.load(default: preferenceDefaults.appearance)
         hotkey = NookHotkeyStore.load(default: preferenceDefaults.hotkey)
         displayPreference = NookDisplayStore.load(default: preferenceDefaults.display)
@@ -189,6 +213,22 @@ public final class AppState: ObservableObject {
         NookHotkeyStore.save(hotkey)
     }
 
+    /// Installs the live registration transaction used by ``NookHotkeyRecorder``.
+    /// Internal because registration belongs to the coordinator, not host modules.
+    func installHotkeyRebindHandler(_ handler: @escaping (NookHotkey) -> HotkeyRebindResult) {
+        hotkeyRebindHandler = handler
+    }
+
+    /// Submits a recorded candidate. A live coordinator first registers it and only
+    /// persists on success. Without a coordinator this fails closed: accepting an
+    /// unverified candidate would recreate the persisted-but-inactive shortcut bug.
+    func requestHotkeyRebind(_ candidate: NookHotkey) -> HotkeyRebindResult {
+        guard let hotkeyRebindHandler else {
+            return .rejected(message: "The shortcut service is unavailable. Try again.")
+        }
+        return hotkeyRebindHandler(candidate)
+    }
+
     /// Replaces ``displayPreference`` and persists. The coordinator re-places the
     /// chrome on the newly chosen display.
     public func replaceDisplayPreference(_ preference: NookDisplayPreference) {
@@ -199,12 +239,57 @@ public final class AppState: ObservableObject {
         NookDisplayStore.save(preference)
     }
 
+    /// Clears user overrides and applies the host defaults captured at launch without
+    /// writing those defaults back as new overrides. Keeping the stores empty is what
+    /// lets a future app version revise its host defaults for a user who pressed Reset.
+    ///
+    /// `resetHotkey` is false only when Carbon rejected the host's default shortcut;
+    /// in that case the known-working active/persisted shortcut is deliberately kept.
+    func resetPreferencesToHostDefaults(resetHotkey: Bool = true) {
+        NookAppearanceStore.clear()
+        NookDisplayStore.clear()
+        if resetHotkey {
+            NookHotkeyStore.clear()
+        }
+
+        if appearancePreferences != preferenceDefaults.appearance {
+            appearancePreferences = preferenceDefaults.appearance
+        }
+        if resetHotkey, hotkey != preferenceDefaults.hotkey {
+            hotkey = preferenceDefaults.hotkey
+        }
+        if displayPreference != preferenceDefaults.display {
+            displayPreference = preferenceDefaults.display
+        }
+    }
+
     public var isHomeView: Bool {
         viewMode == .home
     }
 
     public var isSettingsView: Bool {
         viewMode == .settings
+    }
+
+    /// Whether the framework chrome currently exposes a back destination. Settings
+    /// returns to the previous home surface first; a module breadcrumb then returns
+    /// that home surface to its root.
+    public var canNavigateBack: Bool {
+        isSettingsView || moduleBreadcrumb?.isEmpty == false
+    }
+
+    /// Performs the same back transition used by the leading top-bar control and the
+    /// trackpad gesture. Returns `false` when already at the root home surface.
+    @discardableResult
+    public func navigateBack() -> Bool {
+        if isSettingsView {
+            showHome()
+            return true
+        }
+
+        guard moduleBreadcrumb?.isEmpty == false else { return false }
+        moduleBreadcrumb = nil
+        return true
     }
 
     /// Switches the chrome to the home view and clears ``errorMessage``.

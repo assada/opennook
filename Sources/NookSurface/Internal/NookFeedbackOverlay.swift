@@ -37,7 +37,7 @@ struct NookFeedbackOverlay: View {
     let reduceMotion: Bool
 
     var body: some View {
-        if let event {
+        if let event, event.hasPlayableDuration {
             TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
                 let elapsed = context.date.timeIntervalSince(event.startedAt)
                 let progress = progressValue(for: event, elapsed: elapsed)
@@ -57,7 +57,7 @@ struct NookFeedbackOverlay: View {
     /// the animation reaches `progress=1` (the natural fade-out point of each cycle), rolls
     /// back to 0, and starts again - every iteration is visually identical to the first.
     private func progressValue(for event: NookFeedbackEvent, elapsed: TimeInterval) -> Double {
-        guard event.duration > 0 else { return 1 }
+        guard event.hasPlayableDuration else { return 1 }
         if event.repeats {
             let phase = elapsed.truncatingRemainder(dividingBy: event.duration)
             return max(phase / event.duration, 0)
@@ -97,7 +97,7 @@ struct NookFeedbackOverlay: View {
                 .init(color: highlight, location: 0.42),
                 .init(color: core, location: 0.5),
                 .init(color: highlight, location: 0.58),
-                .init(color: .clear, location: 1.0)
+                .init(color: .clear, location: 1.0),
             ],
             startPoint: UnitPoint(x: startX, y: 0.5),
             endPoint: UnitPoint(x: endX, y: 0.5)

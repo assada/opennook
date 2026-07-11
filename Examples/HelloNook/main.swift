@@ -9,7 +9,7 @@
 //
 // "Register a view, go": hand `NookApp.main` one SwiftUI view and you have a notch
 // app - top bar, Settings, hotkey, compact pill all come for free. Run with
-// `swift run HelloNook`, then press ⌥⌘; to expand.
+// `swift run HelloNook`, then press ⌥ Space to expand.
 
 import NookApp
 import SwiftUI

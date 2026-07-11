@@ -5,8 +5,6 @@
 // you may not use this file except in compliance with the License.
 // A copy is included at /LICENSE in the repository root.
 
-import AppKit
-import NookSurface
 import SwiftUI
 
 /// Top-level Settings surface, rendered when the expanded nook is in `.settings` mode.
@@ -20,111 +18,63 @@ struct SettingsView: View {
     @ObservedObject var appState: AppState
     /// Host-supplied sections rendered below the framework groups and above About.
     let hostSections: [NookSettingsSection]
+    let configuration: NookBuiltInSettingsConfiguration
     let onToggleKeepOpen: () -> Void
     let onResetAllSettings: () -> Void
 
-    @Environment(\.nookResolvedTheme) private var theme
     @Environment(\.nookChromeMetrics) private var metrics
 
     /// Curve-derived leading/trailing insets from the chrome. Matching them here aligns the
     /// section labels and rows with the top bar's leading cluster on a notched display.
     @Environment(\.nookContentInsets) private var contentInsets
 
-    /// Which sections are expanded. In-memory for the session; Appearance opens by default
-    /// so the surface isn't a wall of collapsed headers on first entry.
-    @State private var expandedSections: Set<String> = ["Appearance"]
+    /// Which sections are expanded. In-memory for the lifetime of this Settings view.
+    @State private var expandedSections: Set<String>
 
-    /// Caps Settings height from the main display so rows scroll instead of clipping below the notch panel.
+    /// Caps Settings from the same resolved target screen the coordinator gives the nook.
+    /// This keeps a shorter secondary display from inheriting the main display's viewport.
     private var settingsScrollMaxHeight: CGFloat {
-        guard let screen = NSScreen.main else {
-            return 340
+        guard let screen = NookScreenLocator.screen(matching: appState.displayPreference) else {
+            return SettingsViewportSizing.fallbackMaximumHeight
         }
-
-        let visibleHeight = screen.visibleFrame.height
-        return min(440, max(260, visibleHeight * 0.36))
+        return SettingsViewportSizing.maximumHeight(
+            targetScreenVisibleHeight: screen.visibleFrame.height
+        )
     }
 
-    private var chromeInteractionAccent: Color {
-        theme.accent
-    }
-
-    /// Flip the haptic preference and fire one pulse on the way *on* so the user feels
-    /// what they just enabled. Off doesn't pulse - silence is its whole point.
-    private func toggleHapticFeedback() {
-        var prefs = appState.appearancePreferences
-        prefs.hapticFeedbackEnabled.toggle()
-        appState.replaceAppearancePreferences(prefs)
-        NookHaptics.confirm(enabled: prefs.hapticFeedbackEnabled)
+    init(
+        appState: AppState,
+        hostSections: [NookSettingsSection],
+        configuration: NookBuiltInSettingsConfiguration,
+        onToggleKeepOpen: @escaping () -> Void,
+        onResetAllSettings: @escaping () -> Void
+    ) {
+        self.appState = appState
+        self.hostSections = hostSections
+        self.configuration = configuration
+        self.onToggleKeepOpen = onToggleKeepOpen
+        self.onResetAllSettings = onResetAllSettings
+        _expandedSections = State(
+            initialValue: configuration.resolvedInitiallyExpandedGroupIDs(
+                hostSections: hostSections
+            )
+        )
     }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: metrics.settingsSectionSpacing) {
-                section("Appearance") {
-                    NookAppearanceSettingsSection(appState: appState)
-                }
-
-                section("Display") {
-                    DisplaySettingsSection(appState: appState)
-                }
-
-                section("Shortcut & nook") {
-                    VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
-                        SettingsShortcutRow(appState: appState)
-                        if !appState.hotkeyRegistrationFailures.keys.filter({ $0 != NookHotkeyIDs.toggle }).isEmpty {
-                            SettingsHotkeyFailureRow(appState: appState)
-                        }
-                        SettingActionLine(
-                            icon: appState.keepNookOpen ? "pin.fill" : "pin",
-                            title: "Stay expanded",
-                            detail: appState.keepNookOpen
-                                ? "On — nook stays open after hover ends"
-                                : "Off — closes when the pointer leaves",
-                            accent: chromeInteractionAccent,
-                            action: onToggleKeepOpen
-                        )
-                        SettingActionLine(
-                            icon: appState.appearancePreferences.hapticFeedbackEnabled ? "hand.tap.fill" : "hand.tap",
-                            title: "Haptic feedback",
-                            detail: appState.appearancePreferences.hapticFeedbackEnabled
-                                ? "On — trackpad pulse on confirmation"
-                                : "Off — silent confirmation",
-                            accent: chromeInteractionAccent,
-                            action: toggleHapticFeedback
+                ForEach(configuration.resolvedGroups(hostSections: hostSections)) { group in
+                    section(id: group.id, title: group.title) {
+                        SettingsGroupContent(
+                            appState: appState,
+                            group: group,
+                            hostSections: hostSections,
+                            configuration: configuration,
+                            onToggleKeepOpen: onToggleKeepOpen,
+                            onResetAllSettings: onResetAllSettings
                         )
                     }
-                }
-
-                section("Data") {
-                    VStack(alignment: .leading, spacing: metrics.settingsGroupSpacing) {
-                        SettingsDataCommandRow(
-                            title: "Preview status banner",
-                            subtitle: "Shows the transient message channel under the top bar",
-                            icon: "text.bubble",
-                            style: .standard,
-                            action: {
-                                appState.errorMessage = "Something went wrong — try again."
-                                appState.showHome()
-                            }
-                        )
-                        SettingsDataCommandRow(
-                            title: "Reset All Settings",
-                            subtitle: "Theme, surface, layout, display, hotkey, stay expanded",
-                            icon: "arrow.counterclockwise",
-                            style: .standard,
-                            action: onResetAllSettings
-                        )
-                    }
-                }
-
-                ForEach(hostSections) { hostSection in
-                    section(hostSection.title) {
-                        hostSection.content()
-                    }
-                }
-
-                section("About") {
-                    SettingsAboutCard()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,15 +87,16 @@ struct SettingsView: View {
     /// open - the content indented under a connector hairline.
     @ViewBuilder
     private func section<Content: View>(
-        _ title: String,
+        id: String,
+        title: String,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         SettingsDisclosureSection(
             title: title,
             isExpanded: Binding(
-                get: { expandedSections.contains(title) },
+                get: { expandedSections.contains(id) },
                 set: { open in
-                    if open { expandedSections.insert(title) } else { expandedSections.remove(title) }
+                    if open { expandedSections.insert(id) } else { expandedSections.remove(id) }
                 }
             ),
             content: content

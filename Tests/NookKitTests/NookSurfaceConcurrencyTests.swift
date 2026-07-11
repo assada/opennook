@@ -5,6 +5,7 @@
 // Modifications license: /LICENSE-MIT-NOOKSURFACE
 
 import AppKit
+import Combine
 import SwiftUI
 import XCTest
 
@@ -103,7 +104,10 @@ final class NookSurfaceConcurrencyTests: XCTestCase {
     func testDropEndsSessionAndTrailingExitIsNoOp() {
         let nook = makeNook()
         var dropped: [URL] = []
-        nook.onFileDrop = { urls in dropped = urls; return true }
+        nook.onFileDrop = { urls in
+            dropped = urls
+            return true
+        }
 
         _ = nook.nookPanelDraggingEntered([URL(fileURLWithPath: "/tmp/a")])
         let accepted = nook.nookPanelPerformDrop([URL(fileURLWithPath: "/tmp/a")])
@@ -209,8 +213,13 @@ final class NookSurfaceConcurrencyTests: XCTestCase {
 
     private func feedbackEvent(duration: TimeInterval, repeats: Bool) -> NookFeedbackEvent {
         NookFeedbackEvent(
-            id: UUID(), startedAt: Date(), effect: .shimmer, duration: duration,
-            tint: .white, respectsReduceMotion: true, repeats: repeats
+            id: UUID(),
+            startedAt: Date(),
+            effect: .shimmer,
+            duration: duration,
+            tint: .white,
+            respectsReduceMotion: true,
+            repeats: repeats
         )
     }
 
@@ -245,6 +254,43 @@ final class NookSurfaceConcurrencyTests: XCTestCase {
 
         try? await Task.sleep(nanoseconds: 250_000_000)
         XCTAssertEqual(nook.feedbackEvent?.id, second.id, "the first cue's clear must not nil the second")
+    }
+
+    /// Invalid durations never enter the view tree. Otherwise `TimelineView(.animation)`
+    /// would keep ticking at 60fps while `progressValue` rendered only `Color.clear`.
+    func testFeedbackRejectsNonPositiveAndNonFiniteDurations() {
+        let invalidDurations: [TimeInterval] = [
+            0,
+            -1,
+            Double.infinity,
+            -Double.infinity,
+            Double.greatestFiniteMagnitude,
+            Double.nan,
+        ]
+        for duration in invalidDurations {
+            let nook = makeNook()
+
+            nook.setFeedbackEvent(feedbackEvent(duration: duration, repeats: false))
+
+            XCTAssertNil(nook.feedbackEvent, "duration \(duration) must not arm a feedback timeline")
+        }
+    }
+
+    /// A cue requested while hidden starts when the chrome becomes visible, not at the
+    /// stale request timestamp. It must then clear one duration after that replay point.
+    func testHiddenFeedbackReanchorsAndClearsWhenReplayed() async {
+        let nook = makeNook()
+        nook.playFeedback(.shimmer, duration: 0.05)
+
+        // Let the original request timestamp expire while the cue remains queued.
+        try? await Task.sleep(for: .milliseconds(80))
+        let replayedAt = Date()
+        nook.replayPendingFeedback(at: replayedAt)
+
+        XCTAssertEqual(nook.feedbackEvent?.startedAt, replayedAt)
+        XCTAssertNotNil(nook.feedbackEvent, "an expired hidden request must still replay visibly")
+        await waitUntil { nook.feedbackEvent == nil }
+        XCTAssertNil(nook.feedbackEvent, "a replayed one-shot must tear down its timeline")
     }
 
     // MARK: - Layout-resize grace
@@ -289,6 +335,59 @@ final class NookSurfaceConcurrencyTests: XCTestCase {
         // Once refreshing stops, it expires.
         await waitUntil { !nook.isLayoutGraceActive }
         XCTAssertFalse(nook.isLayoutGraceActive)
+    }
+
+    /// Refreshing the grace deadline during a resize animation must not re-publish `true`
+    /// on every frame. Consumers and `NookView` only need the active/inactive edges.
+    func testLayoutGraceRefreshPublishesOnlyStateEdges() {
+        let nook = makeNook()
+        nook.transitionConfiguration.layoutGraceDuration = 5
+        var emissions: [Bool] = []
+        let cancellable = nook.$isLayoutGraceActive
+            .dropFirst()
+            .sink { emissions.append($0) }
+
+        withExtendedLifetime(cancellable) {
+            nook.beginLayoutGrace()
+            for _ in 0..<20 {
+                nook.beginLayoutGrace()
+            }
+            XCTAssertEqual(emissions, [true], "deadline refreshes must reuse one active grace state")
+
+            nook.endLayoutGrace()
+            XCTAssertEqual(emissions, [true, false])
+        }
+    }
+
+    /// The standard initializer used by AppCoordinator has compact content. It must install
+    /// the same state observer as the no-compact convenience initializer so collapse cancels
+    /// a long grace immediately instead of leaving its timer and engagement signal alive.
+    func testCompactContentInitEndsLayoutGraceOnCollapse() async throws {
+        guard let screen = NSScreen.main else {
+            throw XCTSkip("No main display attached")
+        }
+
+        let nook = Nook(
+            expanded: { Text("expanded") },
+            compactLeading: { Text("compact") }
+        )
+        nook.transitionConfiguration = NookTransitionConfiguration(
+            openingAnimation: .linear(duration: 0),
+            closingAnimation: .linear(duration: 0),
+            conversionAnimation: .linear(duration: 0),
+            skipIntermediateHides: true,
+            animationDuration: 0,
+            layoutGraceDuration: 5
+        )
+
+        await nook.expand(on: screen)
+        nook.beginLayoutGrace()
+        XCTAssertTrue(nook.isLayoutGraceActive)
+
+        await nook.compact(on: screen)
+        XCTAssertFalse(nook.isLayoutGraceActive, "collapse must cancel layout grace immediately")
+
+        await nook.hide()
     }
 
     /// Hover-exit auto-compact must not run while layout grace is active - the common

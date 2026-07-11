@@ -42,9 +42,39 @@ Defaults are `"Home"` for the title and the OpenNook brand mark for the icon
 `"house"`, to use your own glyph. Set `leadingTitle` to return an empty string
 if you want a title-only cluster with no icon override.
 
+## Extend the built-in Settings screen
+
+Prefer extending the framework Settings screen over replacing it. Host sections use the same
+disclosure layout, metrics, theme, and `AppState` environment as OpenNook's own controls:
+
+```swift
+configuration.addSettingsSection(title: "AI") {
+    AISettingsView()
+}
+```
+
+If a built-in control does not apply to the product, hide only that item and keep the rest of
+the framework UI:
+
+```swift
+configuration.builtInSettings.hiddenItems = [.theme, .surface]
+```
+
+Available items cover appearance, display, shortcut and nook behavior, data actions, and About.
+`onResetAllSettings` runs after OpenNook resets its preferences, so an injected section can join
+the same reset action:
+
+```swift
+configuration.builtInSettings.onResetAllSettings = {
+    productPreferences.reset()
+}
+```
+
+Use `setSettings(_:)` only when the host intentionally owns the complete Settings experience.
+
 ## See also
 
-- [Theming](/guides/theming/#custom-settings-surface) - replace the built-in
-  Settings screen with `setSettings(_:)`, the companion to `showsSettings`.
+- [Theming](/guides/theming/#custom-settings-surface) - extend, trim, or replace the
+  built-in Settings screen.
 - [Your first nook](/start/first-nook/#2-customize-via-nookconfiguration) - where
   the `topBar` flags first appear, alongside the other `NookConfiguration` knobs.

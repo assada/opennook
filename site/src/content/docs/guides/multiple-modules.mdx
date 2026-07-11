@@ -118,6 +118,13 @@ navigation. The module observes the clear and pops its own sub-state:
 }
 ```
 
+When the macOS **Swipe between pages** Trackpad gesture is enabled, a
+two-finger swipe right over the expanded nook invokes that same back path.
+OpenNook starts tracking only while a back destination exists and only for a
+horizontal gesture, so ordinary vertical scrolling continues unchanged. The
+leading glyph remains the visible, keyboard-accessible alternative; the swipe
+is an accelerator, not the only way back.
+
 This is a soft state hint, not a view-mode change. It does not affect
 `AppState.viewMode` or the home/Settings routing - a breadcrumb can be set while
 the home view is showing, and entering Settings takes over the same leading slot

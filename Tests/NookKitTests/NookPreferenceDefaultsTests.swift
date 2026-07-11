@@ -7,6 +7,7 @@
 
 import NookSurface
 import XCTest
+
 @testable import NookKit
 
 /// Launch-seed preference defaults: a host can ship its own out-of-box appearance /
@@ -90,6 +91,83 @@ final class NookPreferenceDefaultsTests: XCTestCase {
                     NookPreferenceStorage.defaults.data(forKey: key),
                     "Seeding wrote \(key) to UserDefaults; it should stay a pure fallback."
                 )
+            }
+        }
+    }
+
+    /// Reset removes user overrides instead of persisting the current host seed as a
+    /// new override. A later build can therefore revise its defaults for this user.
+    func testResetClearsOverridesAndAppliesCapturedHostDefaultsWithoutPersisting() {
+        PreferenceStoreTestIsolation.withIsolatedStore {
+            NookAppearanceStore.save(.default)
+            NookHotkeyStore.save(.default)
+            NookDisplayStore.save(.builtIn)
+            let appState = AppState(preferenceDefaults: customDefaults)
+
+            appState.resetPreferencesToHostDefaults()
+
+            XCTAssertEqual(appState.appearancePreferences, customDefaults.appearance)
+            XCTAssertEqual(appState.hotkey, customDefaults.hotkey)
+            XCTAssertEqual(appState.displayPreference, customDefaults.display)
+            for key in PreferenceStoreTestIsolation.storeKeys {
+                XCTAssertNil(
+                    NookPreferenceStorage.defaults.data(forKey: key),
+                    "Reset must clear \(key), not write the host seed back into it."
+                )
+            }
+
+            let revisedDefaults = NookPreferenceDefaults(
+                appearance: NookAppearancePreferences(chromePalette: .light),
+                hotkey: NookHotkey(keyCode: 13, carbonModifiers: 2048, keySymbol: "W"),
+                display: .specific("revised-display")
+            )
+            let relaunched = AppState(preferenceDefaults: revisedDefaults)
+            XCTAssertEqual(relaunched.appearancePreferences, revisedDefaults.appearance)
+            XCTAssertEqual(relaunched.hotkey, revisedDefaults.hotkey)
+            XCTAssertEqual(relaunched.displayPreference, revisedDefaults.display)
+        }
+    }
+
+    /// The user-facing coordinator action must use the captured host bag too. This
+    /// catches a regression where `AppState` knew the seed but Settings Reset still
+    /// hardcoded the framework defaults.
+    func testCoordinatorResetUsesCapturedHostDefaults() {
+        PreferenceStoreTestIsolation.withIsolatedStore {
+            let hostDefaults = NookPreferenceDefaults(
+                appearance: NookAppearancePreferences(
+                    chromePalette: .dark,
+                    surfaceStyle: .translucent,
+                    presentation: .floating,
+                    hapticFeedbackEnabled: true,
+                    keepNookOpen: true
+                ),
+                hotkey: NookHotkey(
+                    keyCode: 90,
+                    carbonModifiers: 6_144,
+                    keySymbol: "F20"
+                ),
+                display: .main
+            )
+            NookAppearanceStore.save(.default)
+            NookHotkeyStore.save(.default)
+            NookDisplayStore.save(.builtIn)
+
+            let appState = AppState(preferenceDefaults: hostDefaults)
+            let surface = FakeNookSurface()
+            let coordinator = AppCoordinator(
+                appState: appState,
+                moduleHost: ModuleHost(configuration: NookConfiguration()),
+                surface: surface
+            )
+
+            coordinator.resetAllSettingsToDefaults()
+
+            XCTAssertEqual(appState.appearancePreferences, hostDefaults.appearance)
+            XCTAssertEqual(appState.hotkey, hostDefaults.hotkey)
+            XCTAssertEqual(appState.displayPreference, hostDefaults.display)
+            XCTAssertTrue(surface.staysExpandedOnHoverExit)
+            for key in PreferenceStoreTestIsolation.storeKeys {
+                XCTAssertNil(NookPreferenceStorage.defaults.data(forKey: key))
             }
         }
     }

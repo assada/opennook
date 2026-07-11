@@ -7,12 +7,11 @@
 
 import AppKit
 import Combine
-import SwiftUI
-
 // Re-exported so a host app needs only `import NookApp` to reach the registration API
 // (`NookConfiguration`, `NookResolvedTheme`, `AppState`, ...) and the surface types.
 @_exported import NookKit
 @_exported import NookSurface
+import SwiftUI
 
 /// Library entry point shared by the SPM executable trampoline
 /// (`Sources/NookExecutable/main.swift`) and the Xcode app target's
@@ -144,34 +143,50 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildMenu() }
             .store(in: &cancellables)
+
+        // The global registration already tracks this value in AppCoordinator. Keep
+        // the menu's visible key equivalent on the same source of truth as well.
+        coordinator.appState.$hotkey
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildMenu() }
+            .store(in: &cancellables)
     }
 
     private func rebuildMenu() {
         guard let statusItem else { return }
         let hostName = moduleHost.branding.hostName
+        let showHotkey = coordinator.appState.hotkey
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(
+        let showItem = NSMenuItem(
             title: "Show \(hostName)",
             action: #selector(showNook),
-            keyEquivalent: ";"
-        ))
+            keyEquivalent: showHotkey.menuKeyEquivalent
+        )
+        showItem.keyEquivalentModifierMask = showHotkey.menuModifierMask
+        menu.addItem(showItem)
         // "Settings..." tracks the chrome: dropped when the active module disabled Settings,
         // since there is no Settings UI to open. "Toggle Stay Expanded" is kept regardless
         // - it's chrome-independent and is the only keep-open control left once the top
         // bar (and its lock) is hidden.
         if moduleHost.configuration.topBar.showsSettings {
-            menu.addItem(NSMenuItem(
-                title: "Settings…",
-                action: #selector(showSettings),
-                keyEquivalent: ","
-            ))
+            menu.addItem(
+                NSMenuItem(
+                    title: "Settings…",
+                    action: #selector(showSettings),
+                    keyEquivalent: ","
+                )
+            )
         }
-        menu.addItem(NSMenuItem(
-            title: "Toggle Stay Expanded",
-            action: #selector(toggleKeepOpen),
-            keyEquivalent: "k"
-        ))
+        menu.addItem(
+            NSMenuItem(
+                title: "Toggle Stay Expanded",
+                action: #selector(toggleKeepOpen),
+                keyEquivalent: "k"
+            )
+        )
 
         // Modules - a multi-module host that left switching in the menu bar (the default
         // placement) gets a section here: one item per module, a check on the active one,
@@ -196,13 +211,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(
-            title: "Quit",
-            action: #selector(quit),
-            keyEquivalent: "q"
-        ))
+        menu.addItem(
+            NSMenuItem(
+                title: "Quit",
+                action: #selector(quit),
+                keyEquivalent: "q"
+            )
+        )
 
-        menu.items.forEach { $0.target = self }
+        for item in menu.items {
+            item.target = self
+        }
         statusItem.menu = menu
     }
 

@@ -30,9 +30,12 @@ The one-line entry point. `import NookApp` re-exports `NookKit` and
 
 The app chrome layered over `NookSurface`.
 
-- **Registration** - `NookConfiguration`, `NookTopBarConfiguration`. The
+- **Registration** - `NookConfiguration`, `NookTopBarConfiguration`,
+  `NookBuiltInSettingsConfiguration`, `NookBuiltInSettingsItem`, and
+  `NookSettingsSection`. The
   host-app seam: home/compact content, theme, lifecycle hooks, chrome flags, the
-  shape/animation/width knobs, and `setSettings(_:)`. See
+  shape/animation/width knobs, built-in Settings visibility, injected Settings
+  sections, and complete Settings replacement. See
   [Your first nook](/start/first-nook/) and
   [Settings chrome](/guides/settings-chrome/). Source:
   `Sources/NookKit/App/NookConfiguration.swift`.

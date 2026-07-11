@@ -8,11 +8,21 @@
 import NookSurface
 import SwiftUI
 
+/// How the framework responds to an Escape command delivered by the expanded surface.
+public enum NookEscapeBehavior: Sendable {
+    /// Preserve the framework's original behavior: collapse to the compact pill.
+    case compact
+    /// Fully dismiss the surface, regardless of pointer location.
+    case dismiss
+    /// Fully dismiss only while the pointer is outside the nook chrome.
+    case dismissWhenPointerOutside
+}
+
 /// Host-process-global *chrome behavior* knobs that the framework otherwise hardcodes:
 /// hover side-effects, the cold-launch greeting, and how appearance preferences map to
 /// the surface backdrop.
 ///
-/// These are distinct from ``NookConfiguration``'s per-surface content/theme seams - 
+/// These are distinct from ``NookConfiguration``'s per-surface content/theme seams -
 /// they describe how the single shared notch surface *behaves*, so they live at the
 /// host-process level (``NookHostConfiguration/chromeBehavior``). The single-module path
 /// mirrors them on ``NookConfiguration/chromeBehavior`` and forwards onto the synthesized
@@ -44,6 +54,10 @@ public struct NookChromeBehavior: Sendable {
     /// into its compact launch state, it just skips the feedback flourish.
     public var showsLaunchShimmer: Bool
 
+    /// How an Escape command delivered by the expanded surface is handled. Defaults to
+    /// ``NookEscapeBehavior/compact`` to preserve the framework's original behavior.
+    public var escapeBehavior: NookEscapeBehavior
+
     /// Overrides how appearance preferences map to the surface backdrop. `nil` (the
     /// default) uses the framework mapping (``NookBackdropMapping/notchBackdrop(preferences:effectiveColorScheme:reduceTransparency:)``):
     /// solid black/white for `.solid` or Reduce Transparency, otherwise a `.sidebar`
@@ -54,10 +68,12 @@ public struct NookChromeBehavior: Sendable {
     public init(
         hoverBehavior: NookHoverBehavior = [],
         showsLaunchShimmer: Bool = true,
+        escapeBehavior: NookEscapeBehavior = .compact,
         backdrop: BackdropResolver? = nil
     ) {
         self.hoverBehavior = hoverBehavior
         self.showsLaunchShimmer = showsLaunchShimmer
+        self.escapeBehavior = escapeBehavior
         self.backdrop = backdrop
     }
 

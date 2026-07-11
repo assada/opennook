@@ -46,6 +46,8 @@ public final class HotkeyController {
     private struct Registration: Sendable {
         let carbonID: UInt32
         let ref: CarbonRef?
+        let keyCode: UInt32
+        let modifiers: UInt32
         let handler: Handler
     }
 
@@ -84,9 +86,14 @@ public final class HotkeyController {
         }
     }
 
-    /// Registers a global hotkey under `id`, replacing any existing registration for the
-    /// same `id`. Carbon `keyCode` is a `kVK_*` virtual key code; `modifiers` is a
-    /// Carbon modifier mask (`cmdKey | optionKey | ...`). Returns `noErr` on success.
+    /// Registers a global hotkey under `id`, transactionally replacing any existing
+    /// registration for the same `id`. Carbon `keyCode` is a `kVK_*` virtual key code;
+    /// `modifiers` is a Carbon modifier mask (`cmdKey | optionKey | ...`). Returns
+    /// `noErr` on success.
+    ///
+    /// The existing registration is removed only *after* Carbon accepted the candidate.
+    /// A failed rebind therefore leaves the prior shortcut and handler active. Rebinding
+    /// the same combination merely replaces its handler without touching Carbon.
     @discardableResult
     public func register(
         _ id: String,
@@ -94,7 +101,21 @@ public final class HotkeyController {
         modifiers: UInt32,
         handler: @escaping Handler
     ) -> OSStatus {
-        unregister(id)
+        if let existing = registrations[id],
+            existing.keyCode == keyCode,
+            existing.modifiers == modifiers
+        {
+            let updated = Registration(
+                carbonID: existing.carbonID,
+                ref: existing.ref,
+                keyCode: keyCode,
+                modifiers: modifiers,
+                handler: handler
+            )
+            registrations[id] = updated
+            handlersByCarbonID[existing.carbonID] = handler
+            return noErr
+        }
 
         let handlerStatus = installEventHandlerIfNeeded()
         guard handlerStatus == noErr else { return handlerStatus }
@@ -102,7 +123,7 @@ public final class HotkeyController {
         let carbonID = nextCarbonID
         nextCarbonID += 1
 
-        let hotKeyID = EventHotKeyID(signature: OSType(0x4E4F4F4B), id: carbonID) // "NOOK"
+        let hotKeyID = EventHotKeyID(signature: OSType(0x4E4F_4F4B), id: carbonID)  // "NOOK"
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
             keyCode,
@@ -114,9 +135,14 @@ public final class HotkeyController {
         )
         guard status == noErr else { return status }
 
+        // Carbon accepted the candidate. Only now is it safe to retire the prior
+        // binding: until this point every failure path deliberately left it untouched.
+        unregister(id)
         registrations[id] = Registration(
             carbonID: carbonID,
             ref: ref.map(CarbonRef.init(pointer:)),
+            keyCode: keyCode,
+            modifiers: modifiers,
             handler: handler
         )
         handlersByCarbonID[carbonID] = handler
@@ -158,33 +184,40 @@ public final class HotkeyController {
             eventKind: UInt32(kEventHotKeyPressed)
         )
         var installedHandler: EventHandlerRef?
-        let status = InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
-            guard let userData, let event else { return noErr }
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, userData in
+                guard let userData, let event else { return noErr }
 
-            var hotKeyID = EventHotKeyID()
-            let status = GetEventParameter(
-                event,
-                EventParamName(kEventParamDirectObject),
-                EventParamType(typeEventHotKeyID),
-                nil,
-                MemoryLayout<EventHotKeyID>.size,
-                nil,
-                &hotKeyID
-            )
-            guard status == noErr else { return noErr }
+                var hotKeyID = EventHotKeyID()
+                let status = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+                guard status == noErr else { return noErr }
 
-            let controller = Unmanaged<HotkeyController>.fromOpaque(userData).takeUnretainedValue()
-            let carbonID = hotKeyID.id
-            // Hop onto the main actor before touching any controller state. If Carbon
-            // already delivered on the main thread this still coalesces correctly; if it
-            // did not, this is what keeps the dictionary single-actor.
-            if Thread.isMainThread {
-                MainActor.assumeIsolated { controller.dispatchHandler(forCarbonID: carbonID) }
-            } else {
-                DispatchQueue.main.async { controller.dispatchHandler(forCarbonID: carbonID) }
-            }
-            return noErr
-        }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &installedHandler)
+                let controller = Unmanaged<HotkeyController>.fromOpaque(userData).takeUnretainedValue()
+                let carbonID = hotKeyID.id
+                // Hop onto the main actor before touching any controller state. If Carbon
+                // already delivered on the main thread this still coalesces correctly; if it
+                // did not, this is what keeps the dictionary single-actor.
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated { controller.dispatchHandler(forCarbonID: carbonID) }
+                } else {
+                    DispatchQueue.main.async { controller.dispatchHandler(forCarbonID: carbonID) }
+                }
+                return noErr
+            },
+            1,
+            &eventType,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &installedHandler
+        )
         if status == noErr {
             eventHandler = installedHandler.map(CarbonRef.init(pointer:))
         }

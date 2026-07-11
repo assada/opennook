@@ -5,10 +5,11 @@
 // you may not use this file except in compliance with the License.
 // A copy is included at /LICENSE in the repository root.
 
+import NookSurface
 import SwiftUI
 import XCTest
+
 @testable import NookKit
-import NookSurface
 
 // `@MainActor`: the configuration's content and theme closures are main-actor
 // isolated (they build SwiftUI views and resolve the chrome palette), so the tests
@@ -179,7 +180,9 @@ final class NookConfigurationTests: XCTestCase {
     /// chrome font design to `.default`, so the chrome matches the system out of the box.
     func testDefaultThemeAccentAndFontDesignMatchSystem() {
         let theme = NookResolvedTheme.resolve(
-            preferences: .default, effectiveColorScheme: .dark, reduceTransparency: false
+            preferences: .default,
+            effectiveColorScheme: .dark,
+            reduceTransparency: false
         )
         XCTAssertEqual(theme.accent, Color(nsColor: .controlAccentColor))
         XCTAssertEqual(theme.fontDesign, .default)
@@ -188,9 +191,15 @@ final class NookConfigurationTests: XCTestCase {
     /// A host palette can override the accent and font design; both round-trip intact.
     func testCustomAccentAndFontDesignArePreserved() {
         let theme = NookResolvedTheme(
-            primaryLabel: .white, secondaryLabel: .white, tertiaryLabel: .white,
-            quaternaryLabel: .white, subtleFill: .white, subtleStroke: .white,
-            headerInactiveIcon: .white, accent: .pink, fontDesign: .rounded
+            primaryLabel: .white,
+            secondaryLabel: .white,
+            tertiaryLabel: .white,
+            quaternaryLabel: .white,
+            subtleFill: .white,
+            subtleStroke: .white,
+            headerInactiveIcon: .white,
+            accent: .pink,
+            fontDesign: .rounded
         )
         XCTAssertEqual(theme.accent, .pink)
         XCTAssertEqual(theme.fontDesign, .rounded)
@@ -229,5 +238,49 @@ final class NookConfigurationTests: XCTestCase {
         configuration.setSettings { Text("Custom settings") }
         XCTAssertNotNil(configuration.settings)
         _ = configuration.settings?()
+    }
+
+    func testBuiltInSettingsAreFullyVisibleByDefault() {
+        let builtInSettings = NookConfiguration().builtInSettings
+
+        XCTAssertTrue(builtInSettings.hiddenItems.isEmpty)
+        XCTAssertNil(builtInSettings.onResetAllSettings)
+        XCTAssertTrue(NookBuiltInSettingsItem.allCases.allSatisfy(builtInSettings.shows))
+    }
+
+    func testBuiltInSettingsCanHideOnlyHostSelectedItems() {
+        var configuration = NookConfiguration()
+        configuration.builtInSettings.hiddenItems = [.theme, .surface]
+
+        XCTAssertFalse(configuration.builtInSettings.shows(.theme))
+        XCTAssertFalse(configuration.builtInSettings.shows(.surface))
+        XCTAssertTrue(configuration.builtInSettings.shows(.layout))
+        XCTAssertTrue(configuration.builtInSettings.shows(.accent))
+        XCTAssertTrue(configuration.builtInSettings.showsAppearanceSection)
+    }
+
+    func testBuiltInSettingsAcceptTaskOrientedGroups() {
+        let groups = [
+            NookSettingsGroup(
+                id: "actions",
+                title: "Actions",
+                items: [.hostSection("host.actions")]
+            ),
+            NookSettingsGroup(
+                id: "appearance",
+                title: "Appearance",
+                items: [.builtIn(.layout), .builtIn(.accent)]
+            ),
+        ]
+
+        let configuration = NookBuiltInSettingsConfiguration(
+            hiddenItems: [.hapticFeedback],
+            groups: groups,
+            initiallyExpandedGroupIDs: ["actions"]
+        )
+
+        XCTAssertEqual(configuration.groups, groups)
+        XCTAssertEqual(configuration.initiallyExpandedGroupIDs, ["actions"])
+        XCTAssertEqual(configuration.hiddenItems, [.hapticFeedback])
     }
 }

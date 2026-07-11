@@ -6,6 +6,7 @@
 // A copy is included at /LICENSE in the repository root.
 
 import XCTest
+
 @testable import NookKit
 
 final class AppStateTests: XCTestCase {
@@ -24,6 +25,37 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.viewMode, .home)
         XCTAssertTrue(state.isHomeView)
         XCTAssertFalse(state.isSettingsView)
+    }
+
+    func testNavigateBackClearsModuleBreadcrumbFromHome() {
+        let state = AppState()
+        state.moduleBreadcrumb = "Summary"
+
+        XCTAssertTrue(state.canNavigateBack)
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertNil(state.moduleBreadcrumb)
+        XCTAssertFalse(state.canNavigateBack)
+    }
+
+    func testNavigateBackReturnsFromSettingsBeforeClearingBreadcrumb() {
+        let state = AppState()
+        state.moduleBreadcrumb = "Summary"
+        state.showSettings()
+
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertTrue(state.isHomeView)
+        XCTAssertEqual(state.moduleBreadcrumb, "Summary")
+
+        XCTAssertTrue(state.navigateBack())
+        XCTAssertNil(state.moduleBreadcrumb)
+    }
+
+    func testNavigateBackIsNoOpAtRootHome() {
+        let state = AppState()
+
+        XCTAssertFalse(state.canNavigateBack)
+        XCTAssertFalse(state.navigateBack())
+        XCTAssertTrue(state.isHomeView)
     }
 
     func testResetTransientStatusClearsError() {
@@ -47,6 +79,18 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(state.hotkeyRegistrationFailures["toggle"], failure)
     }
 
+    func testGlobalHotkeyFailureHasPublicConvenienceAccessor() {
+        let state = AppState()
+        let failure = HotkeyRegistrationFailure(
+            shortcutName: "Show Nook",
+            combination: "⌥Space"
+        )
+
+        state.recordHotkeyRegistration(id: NookHotkeyIDs.toggle, failure: failure)
+
+        XCTAssertEqual(state.globalHotkeyRegistrationFailure, failure)
+    }
+
     /// A hotkey-registration failure must survive a transient-status reset - unlike
     /// `errorMessage`, it outlives a single nook session.
     func testHotkeyRegistrationFailureSurvivesTransientReset() {
@@ -59,7 +103,8 @@ final class AppStateTests: XCTestCase {
 
         XCTAssertNil(state.errorMessage, "the transient channel is cleared")
         XCTAssertEqual(
-            state.hotkeyRegistrationFailures["toggle"], failure,
+            state.hotkeyRegistrationFailures["toggle"],
+            failure,
             "the durable hotkey failure is NOT cleared by a transient reset"
         )
     }
@@ -99,8 +144,29 @@ final class AppStateTests: XCTestCase {
         state.recordHotkeyRegistration(id: "toggle", failure: nil)
         XCTAssertNil(state.hotkeyRegistrationFailures["toggle"])
         XCTAssertEqual(
-            state.hotkeyRegistrationFailures["module.clock"], moduleFailure,
+            state.hotkeyRegistrationFailures["module.clock"],
+            moduleFailure,
             "clearing one shortcut's failure must not touch another's"
         )
+    }
+
+    func testHotkeyRebindWithoutCoordinatorFailsClosedAndDoesNotPersist() {
+        PreferenceStoreTestIsolation.withIsolatedStore {
+            let state = AppState()
+            let original = state.hotkey
+            let candidate = NookHotkey(
+                keyCode: 13,
+                carbonModifiers: 2048,
+                keySymbol: "W"
+            )
+
+            let result = state.requestHotkeyRebind(candidate)
+
+            guard case .rejected = result else {
+                return XCTFail("an unattached AppState cannot verify a Carbon registration")
+            }
+            XCTAssertEqual(state.hotkey, original)
+            XCTAssertNil(NookPreferenceStorage.defaults.data(forKey: "opennook.hotkey.v1"))
+        }
     }
 }

@@ -5,22 +5,24 @@
 // you may not use this file except in compliance with the License.
 // A copy is included at /LICENSE in the repository root.
 
-import AppKit
-import Carbon.HIToolbox
 import SwiftUI
 
 /// Settings row for the global show/hide hotkey. Tap the shortcut to record a new one:
-/// the next modifier + key combination is captured, persisted via `AppState`, and
-/// re-registered live by `AppCoordinator`. Escape cancels.
+/// the next modifier + key combination is validated and registered by `AppCoordinator`,
+/// then persisted via `AppState`. Escape cancels without changing the active shortcut.
 struct SettingsShortcutRow: View {
     @ObservedObject var appState: AppState
+    @StateObject private var recorder: NookHotkeyRecorder
 
     @Environment(\.nookResolvedTheme) private var theme
     @Environment(\.nookChromeTypography) private var typography
     @Environment(\.nookChromeMetrics) private var metrics
     @Environment(\.nookHostBranding) private var branding
-    @State private var isRecording = false
-    @State private var eventMonitor: Any?
+
+    init(appState: AppState) {
+        self.appState = appState
+        _recorder = StateObject(wrappedValue: NookHotkeyRecorder(appState: appState))
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: metrics.settingsGroupSpacing) {
@@ -33,21 +35,27 @@ struct SettingsShortcutRow: View {
                 Text("Show \(branding.hostName)")
                     .font(typography.settingsRowTitle)
                     .foregroundStyle(theme.primaryLabel.opacity(metrics.settingsTitleEmphasisOpacity))
-                if let failure = appState.hotkeyRegistrationFailures[NookHotkeyIDs.toggle] {
+                if let feedbackMessage = recorder.feedbackMessage {
+                    Text(feedbackMessage)
+                        .font(typography.settingsHint)
+                        .foregroundStyle(Color.orange)
+                } else if let failure = appState.globalHotkeyRegistrationFailure {
                     Text(failure.message)
                         .font(typography.settingsHint)
                         .foregroundStyle(Color.orange)
                 } else {
-                    Text(isRecording ? "Press a shortcut — Esc to cancel" : "Global shortcut — click to change")
-                        .font(typography.settingsHint)
-                        .foregroundStyle(theme.tertiaryLabel)
+                    Text(
+                        recorder.isRecording ? "Press a shortcut — Esc to cancel" : "Global shortcut — click to change"
+                    )
+                    .font(typography.settingsHint)
+                    .foregroundStyle(theme.tertiaryLabel)
                 }
             }
 
             Spacer(minLength: 8)
 
-            Button(action: toggleRecording) {
-                if isRecording {
+            Button(action: recorder.toggle) {
+                if recorder.isRecording {
                     Text("Listening…")
                         .font(typography.settingsFieldLabel)
                         .foregroundStyle(theme.primaryLabel.opacity(metrics.settingsRecordingLabelOpacity))
@@ -77,44 +85,7 @@ struct SettingsShortcutRow: View {
                 + "currently \(appState.hotkey.displaySymbols.joined(separator: " "))"
         )
         .accessibilityHint("Activates to record a new shortcut")
-        .onDisappear { stopRecording() }
-    }
-
-    private func toggleRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            startRecording()
-        }
-    }
-
-    private func startRecording() {
-        isRecording = true
-        appState.isRecordingHotkey = true
-
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Escape cancels without changing the shortcut.
-            if event.keyCode == UInt16(kVK_Escape) {
-                stopRecording()
-                return nil
-            }
-            if let hotkey = NookHotkey(event: event) {
-                appState.replaceHotkey(hotkey)
-                stopRecording()
-            }
-            // Swallow the event either way so it doesn't reach the rest of the app
-            // while recording - including a partial combo that isn't valid yet.
-            return nil
-        }
-    }
-
-    private func stopRecording() {
-        if let eventMonitor {
-            NSEvent.removeMonitor(eventMonitor)
-        }
-        eventMonitor = nil
-        isRecording = false
-        appState.isRecordingHotkey = false
+        .onDisappear { recorder.stop() }
     }
 }
 

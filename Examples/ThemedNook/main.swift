@@ -9,7 +9,7 @@
 //
 // Shows `NookConfiguration.theme` (a custom `NookResolvedTheme` paints the chrome
 // labels) and the `onExpand` / `onCompact` callbacks. Run with `swift run ThemedNook`
-// and watch the console as you toggle the nook with ⌥⌘;.
+// and watch the console as you toggle the nook with ⌥ Space.
 
 import NookApp
 import SwiftUI

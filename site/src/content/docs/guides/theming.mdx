@@ -187,9 +187,12 @@ double horizontal padding on the home view - see
 
 ## Custom Settings surface
 
-The gear opens the framework's built-in Settings screen. To replace it with
-your own, register a Settings view - it stays reachable via the gear as long as
-`topBar.showsSettings` is on, and reads `AppState` from the environment:
+The gear opens the framework's built-in Settings screen. Prefer adding host controls with
+`addSettingsSection` or hiding individual built-in items with `builtInSettings.hiddenItems`;
+both retain the framework layout and behavior. See [Settings chrome](/guides/settings-chrome/).
+
+To intentionally replace the complete surface, register a Settings view. It stays reachable via
+the gear as long as `topBar.showsSettings` is on and reads `AppState` from the environment:
 
 ```swift
 configuration.setSettings { MyProductSettingsView() }

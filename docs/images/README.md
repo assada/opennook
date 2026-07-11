@@ -13,7 +13,7 @@ swift run Nook          # default demo - expanded home view
 swift run ShelfNook     # file shelf (NookComponents)
 ```
 
-Expand with **⌥⌘;** (Option + Command + semicolon), or hover the menu-bar
+Expand with **⌥ Space** (Option + Space), or hover the menu-bar
 pill on the display where the nook appears.
 
 Quit with **⌘Q** on the Nook process, or from the menu-bar item.

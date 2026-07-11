@@ -8,6 +8,7 @@
 import NookSurface
 import SwiftUI
 import XCTest
+
 @testable import NookKit
 
 /// Host-global chrome behavior: hover side-effects, the cold-launch shimmer opt-out, and
@@ -39,10 +40,16 @@ final class NookChromeBehaviorTests: XCTestCase {
         let behavior = NookChromeBehavior.default
         XCTAssertEqual(behavior.hoverBehavior, [])
         XCTAssertTrue(behavior.showsLaunchShimmer)
+        guard case .compact = behavior.escapeBehavior else {
+            return XCTFail("default Escape behavior must preserve compacting")
+        }
         XCTAssertNil(behavior.backdrop)
 
         XCTAssertEqual(NookConfiguration().chromeBehavior.hoverBehavior, [])
         XCTAssertTrue(NookConfiguration().chromeBehavior.showsLaunchShimmer)
+        guard case .compact = NookConfiguration().chromeBehavior.escapeBehavior else {
+            return XCTFail("single-module default Escape behavior must compact")
+        }
         XCTAssertNil(NookConfiguration().chromeBehavior.backdrop)
 
         XCTAssertEqual(NookHostConfiguration().chromeBehavior.hoverBehavior, [])
@@ -71,10 +78,35 @@ final class NookChromeBehaviorTests: XCTestCase {
     func testSingleModuleForwardsChromeBehavior() {
         var configuration = NookConfiguration()
         configuration.chromeBehavior.hoverBehavior = .keepVisible
+        configuration.chromeBehavior.escapeBehavior = .dismissWhenPointerOutside
 
         let moduleHost = ModuleHost(configuration: configuration)
 
         XCTAssertEqual(moduleHost.chromeBehavior.hoverBehavior, .keepVisible)
+        guard case .dismissWhenPointerOutside = moduleHost.chromeBehavior.escapeBehavior else {
+            return XCTFail("single-module Escape behavior was not forwarded")
+        }
+    }
+
+    /// Pointer-conditional dismissal ignores Escape while hovered, then fully hides the
+    /// surface once the pointer leaves.
+    func testEscapeDismissesOnlyWhenPointerIsOutside() async {
+        let surface = FakeNookSurface()
+        let coordinator = makeCoordinator(
+            chromeBehavior: NookChromeBehavior(escapeBehavior: .dismissWhenPointerOutside),
+            surface: surface
+        )
+
+        await surface.expand(on: nil)
+        surface.isHovering = true
+        coordinator.handleEscapeCommand()
+        await coordinator.drainLifecycleForTesting()
+        XCTAssertEqual(surface.state, .expanded)
+
+        surface.isHovering = false
+        coordinator.handleEscapeCommand()
+        await coordinator.drainLifecycleForTesting()
+        XCTAssertEqual(surface.state, .hidden)
     }
 
     /// A host backdrop resolver replaces the framework mapping on the surface.

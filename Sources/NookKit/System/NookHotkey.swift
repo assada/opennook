@@ -25,11 +25,11 @@ public struct NookHotkey: Equatable, Codable, Sendable {
         self.keySymbol = keySymbol
     }
 
-    /// The default shortcut: ⌘⌥;
+    /// The default shortcut: ⌥ Space.
     public static let `default` = NookHotkey(
-        keyCode: UInt32(kVK_ANSI_Semicolon),
-        carbonModifiers: UInt32(cmdKey | optionKey),
-        keySymbol: ";"
+        keyCode: UInt32(kVK_Space),
+        carbonModifiers: UInt32(optionKey),
+        keySymbol: "Space"
     )
 
     /// Modifier glyphs in canonical macOS order (⌃⌥⇧⌘).
@@ -42,11 +42,50 @@ public struct NookHotkey: Equatable, Codable, Sendable {
         return symbols
     }
 
-    /// Every glyph to render, modifiers first then the key - e.g. `["⌘", "⌥", ";"]`.
+    /// Every glyph to render, modifiers first then the key - e.g. `["⌥", "Space"]`.
     public var displaySymbols: [String] { modifierSymbols + [keySymbol] }
 
-    /// Flattened display string, e.g. `"⌘⌥;"`.
+    /// Flattened display string, e.g. `"⌥Space"`.
     public var display: String { displaySymbols.joined() }
+
+    /// AppKit key-equivalent character used by `NSMenuItem`. Named keys use the
+    /// control characters AppKit expects; printable keys are normalized to lowercase.
+    public var menuKeyEquivalent: String {
+        switch keySymbol {
+            case "Space": " "
+            case "↩": "\r"
+            case "⇥": "\t"
+            case "⌫": "\u{8}"
+            case "⌦": "\u{7F}"
+            case "←": "\u{F702}"
+            case "→": "\u{F703}"
+            case "↓": "\u{F701}"
+            case "↑": "\u{F700}"
+            case "F1": "\u{F704}"
+            case "F2": "\u{F705}"
+            case "F3": "\u{F706}"
+            case "F4": "\u{F707}"
+            case "F5": "\u{F708}"
+            case "F6": "\u{F709}"
+            case "F7": "\u{F70A}"
+            case "F8": "\u{F70B}"
+            case "F9": "\u{F70C}"
+            case "F10": "\u{F70D}"
+            case "F11": "\u{F70E}"
+            case "F12": "\u{F70F}"
+            default: keySymbol.lowercased()
+        }
+    }
+
+    /// AppKit modifier mask paired with ``menuKeyEquivalent`` in a native menu.
+    public var menuModifierMask: NSEvent.ModifierFlags {
+        var modifiers: NSEvent.ModifierFlags = []
+        if carbonModifiers & UInt32(controlKey) != 0 { modifiers.insert(.control) }
+        if carbonModifiers & UInt32(optionKey) != 0 { modifiers.insert(.option) }
+        if carbonModifiers & UInt32(shiftKey) != 0 { modifiers.insert(.shift) }
+        if carbonModifiers & UInt32(cmdKey) != 0 { modifiers.insert(.command) }
+        return modifiers
+    }
 }
 
 extension NookHotkey {
@@ -116,5 +155,9 @@ enum NookHotkeyStore {
         if let data = try? JSONEncoder().encode(hotkey) {
             NookPreferenceStorage.defaults.set(data, forKey: defaultsKey)
         }
+    }
+
+    static func clear() {
+        NookPreferenceStorage.defaults.removeObject(forKey: defaultsKey)
     }
 }

@@ -7,14 +7,17 @@
 
 import Carbon
 import XCTest
+
 @testable import NookKit
 
 final class NookHotkeyTests: XCTestCase {
     func testDefaultHotkeyDisplaysCanonicalGlyphs() {
-        // The default is Command-Option-Semicolon. macOS renders modifiers in canonical
-        // order (⌃⌥⇧⌘) - Command is always last, so this shows as "⌥⌘;".
-        XCTAssertEqual(NookHotkey.default.displaySymbols, ["⌥", "⌘", ";"])
-        XCTAssertEqual(NookHotkey.default.display, "⌥⌘;")
+        XCTAssertEqual(NookHotkey.default.keyCode, UInt32(kVK_Space))
+        XCTAssertEqual(NookHotkey.default.carbonModifiers, UInt32(optionKey))
+        XCTAssertEqual(NookHotkey.default.displaySymbols, ["⌥", "Space"])
+        XCTAssertEqual(NookHotkey.default.display, "⌥Space")
+        XCTAssertEqual(NookHotkey.default.menuKeyEquivalent, " ")
+        XCTAssertEqual(NookHotkey.default.menuModifierMask, [.option])
     }
 
     func testModifierSymbolsAreInCanonicalOrder() {
@@ -25,6 +28,19 @@ final class NookHotkeyTests: XCTestCase {
         )
         XCTAssertEqual(hotkey.modifierSymbols, ["⌃", "⌥", "⇧", "⌘"])
         XCTAssertEqual(hotkey.display, "⌃⌥⇧⌘A")
+        XCTAssertEqual(hotkey.menuKeyEquivalent, "a")
+        XCTAssertEqual(hotkey.menuModifierMask, [.control, .option, .shift, .command])
+    }
+
+    func testNamedKeyUsesAppKitMenuEquivalent() {
+        let hotkey = NookHotkey(
+            keyCode: UInt32(kVK_LeftArrow),
+            carbonModifiers: UInt32(controlKey),
+            keySymbol: "←"
+        )
+
+        XCTAssertEqual(hotkey.menuKeyEquivalent, "\u{F702}")
+        XCTAssertEqual(hotkey.menuModifierMask, [.control])
     }
 
     func testRoundTripThroughJSON() throws {
@@ -36,5 +52,34 @@ final class NookHotkeyTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(NookHotkey.self, from: data)
         XCTAssertEqual(decoded, original)
+    }
+
+    func testRecorderValidationRejectsNativeMenuConflicts() {
+        let reserved: [(UInt32, String, String)] = [
+            (UInt32(kVK_ANSI_Q), "Q", "Quit"),
+            (UInt32(kVK_ANSI_Comma), ",", "Settings"),
+            (UInt32(kVK_ANSI_K), "K", "Stay Expanded"),
+        ]
+
+        for (keyCode, symbol, command) in reserved {
+            let hotkey = NookHotkey(
+                keyCode: keyCode,
+                carbonModifiers: UInt32(cmdKey),
+                keySymbol: symbol
+            )
+            XCTAssertTrue(
+                NookHotkeyValidation.rejectionMessage(for: hotkey)?.contains(command) == true
+            )
+        }
+    }
+
+    func testRecorderValidationAllowsModifiedVariantsThatDoNotCollideWithMenu() {
+        let hotkey = NookHotkey(
+            keyCode: UInt32(kVK_ANSI_Q),
+            carbonModifiers: UInt32(cmdKey | optionKey),
+            keySymbol: "Q"
+        )
+
+        XCTAssertNil(NookHotkeyValidation.rejectionMessage(for: hotkey))
     }
 }
