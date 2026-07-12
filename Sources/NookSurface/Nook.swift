@@ -434,7 +434,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     /// Apply hover side-effects (haptic, expand-on-hover, collapse-on-exit).
-    func updateHoverState(_ hovering: Bool) {
+    ///
+    /// `withinInteractionRegion` lets the view reject activity emitted by the animated
+    /// presentation tail after the logical chrome has already collapsed. The effective
+    /// hover state is resolved before firing haptics or claiming a transition.
+    func updateHoverState(_ pointerActive: Bool, withinInteractionRegion: Bool = true) {
+        let hovering = pointerActive && withinInteractionRegion
         guard state != .hidden, hovering != isHovering else { return }
 
         isHovering = hovering

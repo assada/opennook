@@ -6,6 +6,7 @@
 // Original kit license: /ThirdPartyLicenses/DynamicNotchKit.txt
 // Modifications license: /LICENSE-MIT-NOOKSURFACE
 
+import AppKit
 import SwiftUI
 
 /// The notch chrome itself: arches around the menu-bar notch, switches between expanded and
@@ -15,6 +16,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     @ObservedObject private var nook: Nook<Expanded, CompactLeading, CompactTrailing>
     @State private var compactLeadingWidth: CGFloat = 0
     @State private var compactTrailingWidth: CGFloat = 0
+    @State private var hasMeasuredCompactLeading = false
+    @State private var hasMeasuredCompactTrailing = false
     @State private var trackedExpandedSize: CGSize = .zero
     @State private var ambientColor: Color?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -37,7 +40,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     /// Residual safe-area insets the host's expanded view can read via
-    /// ``EnvironmentValues/nookContentInsets``. `.zero` while compact or hidden - 
+    /// ``EnvironmentValues/nookContentInsets``. `.zero` while compact or hidden -
     /// no host expanded content is rendered in those states. The expanded value
     /// is the geometric clearance left over after the chrome's own paddings;
     /// see ``NookContentInsets/expanded(form:topCornerRadius:bottomCornerRadius:chromeSafeAreaInset:)``.
@@ -56,14 +59,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     private var compactCornerRadii: (top: CGFloat, bottom: CGFloat) {
-        (top: 6, bottom: 14)
+        NookCompactHoverTarget.cornerRadii(for: nook.layoutForm, notchHeight: nook.notchSize.height)
     }
 
     /// Floating panels use convex corners - a card when expanded, a capsule when
     /// compact (radius = half the pill height). No notch ears to fuse, so the same
     /// radius applies to all four corners.
     private var floatingExpandedRadius: CGFloat { expandedCornerRadii.bottom }
-    private var floatingCompactRadius: CGFloat { max(nook.notchSize.height / 2, 8) }
+    private var floatingCompactRadius: CGFloat { compactCornerRadii.top }
 
     /// Vertical gap that drops the floating panel clear of the menu bar. Zero in notch
     /// mode, where the chrome is meant to sit flush against the top edge.
@@ -108,7 +111,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// edge gaps mid-bounce.
     ///
     /// The matching `.contentShape(NookShape)` is critical: `.clipShape` only clips drawing,
-    /// not hit-testing. Without it, the hover region falls back to the rectangular bounds - 
+    /// not hit-testing. Without it, the hover region falls back to the rectangular bounds -
     /// which extend down into the would-be-expanded area because the expanded content's
     /// `.fixedSize()` doesn't actually collapse to 0×0 when wrapped in a max-frame. Result:
     /// hovering in the empty space below a compact nook triggers the hover-grow animation.
@@ -120,7 +123,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .compositingGroup()
             .clipShape(notchShape)
             .contentShape(notchShape)
-            .onHover(perform: nook.updateHoverState)
+            .onContinuousHover(perform: handleHover)
+            .onChange(of: compactHoverMeasurements) { _, _ in reconcileCompactHover() }
             .offset(x: xOffset)
             // Floating mode drops the panel below the menu bar; notch mode keeps it
             // flush to the top edge (inset 0). Applied outside the clipped chrome so it
@@ -151,23 +155,73 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         )
     }
 
+    /// Admit pointer activity against logical geometry, not the spring's presentation tail.
+    /// Expanded hover continues to use the rendered shape. Once collapse starts, `state` is
+    /// already `.compact`, so entries must land inside the final compact chrome immediately.
+    private func handleHover(_ phase: HoverPhase) {
+        switch phase {
+            case .active:
+                let isInsideInteractionRegion: Bool
+                if nook.state == .compact {
+                    isInsideInteractionRegion = compactHoverTarget?.contains(screenPoint: NSEvent.mouseLocation) == true
+                } else {
+                    isInsideInteractionRegion = nook.state == .expanded
+                }
+                nook.updateHoverState(true, withinInteractionRegion: isInsideInteractionRegion)
+            case .ended:
+                nook.updateHoverState(false)
+        }
+    }
+
+    private var compactHoverTarget: NookCompactHoverTarget? {
+        guard let panelFrame = nook.windowController?.window?.frame else { return nil }
+        return NookCompactHoverTarget(
+            panelFrame: panelFrame,
+            form: nook.layoutForm,
+            notchSize: nook.notchSize,
+            menubarHeight: nook.menubarHeight,
+            leadingWidth: hasMeasuredCompactLeading ? compactLeadingWidth : nil,
+            trailingWidth: hasMeasuredCompactTrailing ? compactTrailingWidth : nil,
+            leadingSlotDisabled: nook.disableCompactLeading,
+            trailingSlotDisabled: nook.disableCompactTrailing
+        )
+    }
+
+    /// A width of zero can be a legitimate measured `EmptyView`, so readiness is tracked
+    /// separately rather than inferred from the numeric value.
+    private var compactHoverMeasurements: [CGFloat?] {
+        [
+            hasMeasuredCompactLeading ? compactLeadingWidth : nil,
+            hasMeasuredCompactTrailing ? compactTrailingWidth : nil,
+        ]
+    }
+
+    /// Slot geometry arrives asynchronously on the first compact layout. Re-evaluate the
+    /// current pointer when it arrives so a stationary pointer over a real slot is admitted
+    /// without waiting for another mouse-move event.
+    private func reconcileCompactHover() {
+        guard nook.state == .compact else { return }
+        let isInsideInteractionRegion = compactHoverTarget?.contains(screenPoint: NSEvent.mouseLocation) == true
+        nook.updateHoverState(true, withinInteractionRegion: isInsideInteractionRegion)
+    }
+
     private func notchBackdrop() -> some View {
         Group {
             switch nook.backdrop {
-            case .vibrancy(let spec):
-                ZStack {
-                    VisualEffectView(
-                        material: spec.material,
-                        blendingMode: spec.blendingMode
-                    )
-                    if spec.darkenOpacity > 0 {
-                        Color.black.opacity(spec.darkenOpacity)
+                case .vibrancy(let spec):
+                    ZStack {
+                        VisualEffectView(
+                            material: spec.material,
+                            blendingMode: spec.blendingMode
+                        )
+                        if spec.darkenOpacity > 0 {
+                            Color.black.opacity(spec.darkenOpacity)
+                        }
                     }
-                }
-            case .solid(let color):
-                color
-            case .liquidGlass(let glass):
-                liquidGlassBackdrop(glass)
+                case .solid(let color):
+                    color
+                case .liquidGlass(let glass):
+                    liquidGlassBackdrop(glass)
             }
         }
     }
@@ -185,30 +239,30 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         // unconditionally, while the macOS 26 SDK keeps the real material (runtime-gated
         // to macOS 26). This lets a consumer on an earlier Xcode still build the package.
         #if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
-            realLiquidGlass(glass)
-        } else {
-            approximateLiquidGlass(glass)
-        }
+            if #available(macOS 26.0, *) {
+                realLiquidGlass(glass)
+            } else {
+                approximateLiquidGlass(glass)
+            }
         #else
-        approximateLiquidGlass(glass)
+            approximateLiquidGlass(glass)
         #endif
     }
 
     #if compiler(>=6.2)
-    @available(macOS 26.0, *)
-    @ViewBuilder
-    private func realLiquidGlass(_ glass: NookBackdrop.LiquidGlass) -> some View {
-        let tinted: Glass = {
-            guard let tint = glass.tint, glass.tintStrength > 0 else { return .regular }
-            return Glass.regular.tint(tint.opacity(glass.tintStrength))
-        }()
-        Color.clear
-            .glassEffect(tinted, in: notchShape)
-            // The legibility pass is whatever the spec carries - the surface adds no
-            // darken of its own on top of Apple's self-contrasting material.
-            .overlay { glassShading(glass) }
-    }
+        @available(macOS 26.0, *)
+        @ViewBuilder
+        private func realLiquidGlass(_ glass: NookBackdrop.LiquidGlass) -> some View {
+            let tinted: Glass = {
+                guard let tint = glass.tint, glass.tintStrength > 0 else { return .regular }
+                return Glass.regular.tint(tint.opacity(glass.tintStrength))
+            }()
+            Color.clear
+                .glassEffect(tinted, in: notchShape)
+                // The legibility pass is whatever the spec carries - the surface adds no
+                // darken of its own on top of Apple's self-contrasting material.
+                .overlay { glassShading(glass) }
+        }
     #endif
 
     /// The host-supplied legibility shading, rendered as a gradient. `nil` shading draws
@@ -252,7 +306,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(0.5 * glass.highlightStrength),
-                                Color.white.opacity(0.06 * glass.highlightStrength)
+                                Color.white.opacity(0.06 * glass.highlightStrength),
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -295,8 +349,13 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                     .safeAreaInset(edge: .leading, spacing: 0) { Color.clear.frame(width: 8) }
                     .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 4) }
                     .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 8) }
-                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { compactLeadingWidth = $0 }
-                    .transition(.blur(intensity: 6).combined(with: .scale(x: 0, anchor: .trailing)).combined(with: .opacity))
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) {
+                        compactLeadingWidth = $0
+                        hasMeasuredCompactLeading = true
+                    }
+                    .transition(
+                        .blur(intensity: 6).combined(with: .scale(x: 0, anchor: .trailing)).combined(with: .opacity)
+                    )
             }
 
             // Notch mode: a gap exactly the notch width, so the leading/trailing slots
@@ -310,12 +369,17 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                     .safeAreaInset(edge: .trailing, spacing: 0) { Color.clear.frame(width: 8) }
                     .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 4) }
                     .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 8) }
-                    .onGeometryChange(for: CGFloat.self, of: \.size.width) { compactTrailingWidth = $0 }
-                    .transition(.blur(intensity: 6).combined(with: .scale(x: 0, anchor: .leading)).combined(with: .opacity))
+                    .onGeometryChange(for: CGFloat.self, of: \.size.width) {
+                        compactTrailingWidth = $0
+                        hasMeasuredCompactTrailing = true
+                    }
+                    .transition(
+                        .blur(intensity: 6).combined(with: .scale(x: 0, anchor: .leading)).combined(with: .opacity)
+                    )
             }
         }
         .frame(height: nook.notchSize.height)
-        // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` - 
+        // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` -
         // they cannot change at runtime, so no `.onChange` reconciliation is needed.
         // The `@State` `compactLeadingWidth`/`compactTrailingWidth` retain their last
         // measured value when the slot views disappear (SwiftUI doesn't fire
@@ -329,7 +393,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                 nook.expandedContent
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .environment(\.nookContentInsets, contentInsets)
-                    .transition(.blur(intensity: 6).combined(with: .scale(y: 0.72, anchor: .top)).combined(with: .opacity))
+                    .transition(
+                        .blur(intensity: 6).combined(with: .scale(y: 0.72, anchor: .top)).combined(with: .opacity)
+                    )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
