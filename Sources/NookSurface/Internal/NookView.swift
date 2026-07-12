@@ -131,8 +131,6 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .onChange(of: nook.state) { _, state in
                 guard state != .compact else { return }
                 compactHoverAdmission.ended()
-                hasMeasuredCompactLeading = false
-                hasMeasuredCompactTrailing = false
             }
             .offset(x: xOffset)
             // Floating mode drops the panel below the menu bar; notch mode keeps it
@@ -426,9 +424,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         .frame(height: nook.notchSize.height)
         // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` -
         // they cannot change at runtime, so no `.onChange` reconciliation is needed.
-        // Width values retain their last measurement while the slot views disappear,
-        // but readiness resets on exit from compact. A later compact cycle therefore
-        // waits for fresh geometry before admitting hover against those values.
+        // Width values retain their last valid measurement while the slot views disappear.
+        // `onGeometryChange` refreshes them when the width actually changes; preserving
+        // readiness avoids stranding hover when an interrupted transition reuses the view.
     }
 
     private func expandedContent() -> some View {
