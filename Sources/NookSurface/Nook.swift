@@ -260,6 +260,11 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// by moving ``layoutGraceDeadline`` while one worker remains active.
     private var layoutGraceTask: Task<Void, Never>?
 
+    /// A hover exit landed while layout grace was active. The `.ended` event is gone by
+    /// the time grace expires, so the expiry must replay the collapse itself - otherwise
+    /// the surface stays expanded until the next full hover enter/exit cycle.
+    private var hasDeferredHoverExitCompact = false
+
     private var cancellables = Set<AnyCancellable>()
 
     public init(
@@ -451,8 +456,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         }
 
         guard hovering || !suppressesHoverExitCompact else {
+            // A grace-deferred exit replays when the window expires; a
+            // `staysExpandedOnHoverExit` exit is swallowed by design and never replays.
+            hasDeferredHoverExitCompact = !staysExpandedOnHoverExit
             return
         }
+        hasDeferredHoverExitCompact = false
 
         guard let screen = windowController?.window?.screen ?? resolvedScreen else { return }
         runTransition { [weak self] generation in
@@ -899,6 +908,7 @@ extension Nook {
                     if self.isLayoutGraceActive {
                         self.isLayoutGraceActive = false
                     }
+                    self.resumeDeferredHoverExitCompact()
                     return
                 }
             }
@@ -914,6 +924,23 @@ extension Nook {
         layoutGraceTask?.cancel()
         layoutGraceTask = nil
         if isLayoutGraceActive { isLayoutGraceActive = false }
+        // Leaving `.expanded` (or a zero-duration grace) makes any deferred exit moot;
+        // dropping it here keeps a later grace cycle from replaying a stale collapse.
+        hasDeferredHoverExitCompact = false
+    }
+
+    /// Completes a hover-exit collapse that ``updateHoverState(_:withinInteractionRegion:)``
+    /// deferred while layout grace was active. Runs only on natural grace expiry.
+    private func resumeDeferredHoverExitCompact() {
+        guard hasDeferredHoverExitCompact else { return }
+        hasDeferredHoverExitCompact = false
+        guard state == .expanded, !isHovering, !suppressesHoverExitCompact else { return }
+
+        guard let screen = windowController?.window?.screen ?? resolvedScreen else { return }
+        runTransition { [weak self] generation in
+            guard let self else { return }
+            await self._compact(on: screen, skipHide: true, generation: generation)
+        }
     }
 
     /// The layer of the hosting view inside the panel. Layer-level fades run here so the

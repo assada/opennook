@@ -13,7 +13,7 @@ import XCTest
 @MainActor
 final class NookHoverInteractionTests: XCTestCase {
 
-    private func makeNook() -> Nook<Text, Text, EmptyView> {
+    private func makeNook(layoutGraceDuration: TimeInterval = 0) -> Nook<Text, Text, EmptyView> {
         let nook = Nook(
             hoverBehavior: [],
             expanded: { Text("expanded") },
@@ -25,7 +25,7 @@ final class NookHoverInteractionTests: XCTestCase {
             conversionAnimation: .linear(duration: 0.12),
             skipIntermediateHides: true,
             animationDuration: 0.12,
-            layoutGraceDuration: 0
+            layoutGraceDuration: layoutGraceDuration
         )
         return nook
     }
@@ -159,6 +159,77 @@ final class NookHoverInteractionTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(180))
         XCTAssertEqual(nook.state, .compact)
         XCTAssertEqual(expandCount, 0)
+
+        await nook.hide()
+    }
+
+    func testHoverExitDuringLayoutGraceStillCompactsAfterGraceExpires() async throws {
+        guard let screen = NSScreen.main else {
+            throw XCTSkip("No main display attached")
+        }
+
+        let nook = makeNook(layoutGraceDuration: 0.2)
+        await nook.expand(on: screen)
+        nook.updateHoverState(true)
+        await Task.yield()
+
+        // Expanded content resized -> grace opens, then the pointer leaves inside it.
+        nook.noteExpandedContentSizeChange()
+        XCTAssertTrue(nook.isLayoutGraceActive)
+        nook.updateHoverState(false)
+
+        XCTAssertFalse(nook.isHovering)
+        XCTAssertEqual(nook.state, .expanded, "grace must defer the exit, not act on it")
+
+        // No further pointer events arrive: the pointer already left. Once grace
+        // expires the surface must complete the deferred collapse on its own.
+        await waitUntil { nook.state == .compact }
+
+        await nook.hide()
+    }
+
+    func testReenterDuringGraceCancelsDeferredExit() async throws {
+        guard let screen = NSScreen.main else {
+            throw XCTSkip("No main display attached")
+        }
+
+        let nook = makeNook(layoutGraceDuration: 0.2)
+        await nook.expand(on: screen)
+        nook.updateHoverState(true)
+        await Task.yield()
+
+        nook.noteExpandedContentSizeChange()
+        nook.updateHoverState(false)
+        nook.updateHoverState(true)
+
+        try? await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(
+            nook.state, .expanded,
+            "a re-enter during grace must cancel the deferred exit"
+        )
+
+        await nook.hide()
+    }
+
+    func testStayExpandedExitDuringGraceIsNotReplayed() async throws {
+        guard let screen = NSScreen.main else {
+            throw XCTSkip("No main display attached")
+        }
+
+        let nook = makeNook(layoutGraceDuration: 0.2)
+        nook.staysExpandedOnHoverExit = true
+        await nook.expand(on: screen)
+        nook.updateHoverState(true)
+        await Task.yield()
+
+        nook.noteExpandedContentSizeChange()
+        nook.updateHoverState(false)
+
+        try? await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(
+            nook.state, .expanded,
+            "a stay-expanded exit is swallowed by design and must not replay at expiry"
+        )
 
         await nook.hide()
     }
