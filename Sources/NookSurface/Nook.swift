@@ -115,6 +115,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     @Published public private(set) var state: NookState = .hidden
     @Published private(set) var notchSize: CGSize = .zero
     @Published private(set) var menubarHeight: CGFloat = 0
+    @Published private(set) var panelSize: CGSize = .zero
 
     /// Layout resolved for the current window's screen - `.notch` or `.floating`.
     /// Recomputed every time the panel window is built (see `initializeWindow`); drives
@@ -931,6 +932,11 @@ extension Nook {
         notchSize = screen.notchFrameWithMenubarAsBackup.size
         menubarHeight = screen.menubarHeight
         layoutForm = presentation.isFloating(screenHasNotch: screen.hasNotch) ? .floating : .notch
+        let windowSize = NSSize(
+            width: screen.frame.width,
+            height: screen.frame.height / 2
+        )
+        panelSize = windowSize
 
         // Two modifiers used to live on a `NookContentView` shim: a full-bleed
         // top-anchored frame and a conversion animation on hover. Inlining the
@@ -977,16 +983,12 @@ extension Nook {
         panel.contentView = container
         panel.appearance = chromeAppearance
 
-        let size = NSSize(
-            width: screen.frame.width,
-            height: screen.frame.height / 2
-        )
         let origin = NSPoint(
-            x: screen.frame.midX - (size.width / 2),
-            y: screen.frame.maxY - size.height
+            x: screen.frame.midX - (windowSize.width / 2),
+            y: screen.frame.maxY - windowSize.height
         )
 
-        panel.setFrame(NSRect(origin: origin, size: size), display: false)
+        panel.setFrame(NSRect(origin: origin, size: windowSize), display: false)
         panel.layoutIfNeeded()
 
         if orderFront {

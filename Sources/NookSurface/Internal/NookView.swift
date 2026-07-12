@@ -6,7 +6,6 @@
 // Original kit license: /ThirdPartyLicenses/DynamicNotchKit.txt
 // Modifications license: /LICENSE-MIT-NOOKSURFACE
 
-import AppKit
 import SwiftUI
 
 /// The notch chrome itself: arches around the menu-bar notch, switches between expanded and
@@ -18,6 +17,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     @State private var compactTrailingWidth: CGFloat = 0
     @State private var hasMeasuredCompactLeading = false
     @State private var hasMeasuredCompactTrailing = false
+    @State private var compactHoverAdmission = NookCompactHoverAdmission()
     @State private var trackedExpandedSize: CGSize = .zero
     @State private var ambientColor: Color?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -59,7 +59,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     private var compactCornerRadii: (top: CGFloat, bottom: CGFloat) {
-        NookCompactHoverTarget.cornerRadii(for: nook.layoutForm, notchHeight: nook.notchSize.height)
+        compactGeometry.cornerRadii
     }
 
     /// Floating panels use convex corners - a card when expanded, a capsule when
@@ -71,13 +71,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// Vertical gap that drops the floating panel clear of the menu bar. Zero in notch
     /// mode, where the chrome is meant to sit flush against the top edge.
     private var floatingTopInset: CGFloat {
-        isFloating ? nook.menubarHeight + 8 : 0
+        compactGeometry.topInset
     }
 
     private var minWidth: CGFloat {
+        if nook.state == .compact { return compactGeometry.structuralMinimumWidth }
         // A floating panel is purely content-driven; only the notch shape needs a
         // minimum (the notch gap plus its ears).
-        isFloating ? 0 : nook.notchSize.width + (topCornerRadius * 2)
+        return isFloating ? 0 : nook.notchSize.width + (topCornerRadius * 2)
     }
 
     private var topCornerRadius: CGFloat {
@@ -102,7 +103,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// Notch mode re-centers the shape on the physical notch when the leading/trailing
     /// slots differ in width. A floating pill has no notch to center on, so it stays put.
     private var compactXOffset: CGFloat {
-        isFloating ? 0 : (compactTrailingWidth - compactLeadingWidth) / 2
+        compactGeometry.horizontalOffset
     }
 
     /// Backdrop sits behind chrome content, both flattened into a single layer, then clipped
@@ -123,8 +124,16 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .compositingGroup()
             .clipShape(notchShape)
             .contentShape(notchShape)
-            .onContinuousHover(perform: handleHover)
-            .onChange(of: compactHoverMeasurements) { _, _ in reconcileCompactHover() }
+            .onContinuousHover(coordinateSpace: .global, perform: handleHover)
+            .onChange(of: compactHoverMeasurementsReady) { wasReady, isReady in
+                reconcilePendingCompactHover(from: wasReady, to: isReady)
+            }
+            .onChange(of: nook.state) { _, state in
+                guard state != .compact else { return }
+                compactHoverAdmission.ended()
+                hasMeasuredCompactLeading = false
+                hasMeasuredCompactTrailing = false
+            }
             .offset(x: xOffset)
             // Floating mode drops the panel below the menu bar; notch mode keeps it
             // flush to the top edge (inset 0). Applied outside the clipped chrome so it
@@ -156,52 +165,71 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     /// Admit pointer activity against logical geometry, not the spring's presentation tail.
-    /// Expanded hover continues to use the rendered shape. Once collapse starts, `state` is
-    /// already `.compact`, so entries must land inside the final compact chrome immediately.
+    /// `.global` is panel-local here because `initializeWindow` edge-pins a full-panel
+    /// `NSHostingView` root. The event point and `panelSize` therefore share one
+    /// stable, y-down coordinate space.
     private func handleHover(_ phase: HoverPhase) {
         switch phase {
-            case .active:
-                let isInsideInteractionRegion: Bool
-                if nook.state == .compact {
-                    isInsideInteractionRegion = compactHoverTarget?.contains(screenPoint: NSEvent.mouseLocation) == true
-                } else {
-                    isInsideInteractionRegion = nook.state == .expanded
-                }
-                nook.updateHoverState(true, withinInteractionRegion: isInsideInteractionRegion)
+            case .active(let location):
+                let measurementsReady =
+                    nook.state != .compact || compactHoverMeasurementsReady
+                guard
+                    let eventPoint = compactHoverAdmission.active(
+                        at: location,
+                        measurementsReady: measurementsReady
+                    )
+                else { return }
+                admitHover(at: eventPoint)
             case .ended:
+                compactHoverAdmission.ended()
                 nook.updateHoverState(false)
         }
     }
 
-    private var compactHoverTarget: NookCompactHoverTarget? {
-        guard let panelFrame = nook.windowController?.window?.frame else { return nil }
-        return NookCompactHoverTarget(
-            panelFrame: panelFrame,
+    private var compactGeometry: NookCompactGeometry {
+        NookCompactGeometry(
             form: nook.layoutForm,
             notchSize: nook.notchSize,
             menubarHeight: nook.menubarHeight,
-            leadingWidth: hasMeasuredCompactLeading ? compactLeadingWidth : nil,
-            trailingWidth: hasMeasuredCompactTrailing ? compactTrailingWidth : nil,
-            leadingSlotDisabled: nook.disableCompactLeading,
-            trailingSlotDisabled: nook.disableCompactTrailing
+            leadingWidth: nook.disableCompactLeading ? 0 : compactLeadingWidth,
+            trailingWidth: nook.disableCompactTrailing ? 0 : compactTrailingWidth
         )
     }
 
-    /// A width of zero can be a legitimate measured `EmptyView`, so readiness is tracked
-    /// separately rather than inferred from the numeric value.
-    private var compactHoverMeasurements: [CGFloat?] {
-        [
-            hasMeasuredCompactLeading ? compactLeadingWidth : nil,
-            hasMeasuredCompactTrailing ? compactTrailingWidth : nil,
-        ]
+    private var compactHoverMeasurementsReady: Bool {
+        NookCompactHoverAdmission.measurementsReady(
+            leadingSlotDisabled: nook.disableCompactLeading,
+            leadingSlotMeasured: hasMeasuredCompactLeading,
+            trailingSlotDisabled: nook.disableCompactTrailing,
+            trailingSlotMeasured: hasMeasuredCompactTrailing
+        )
     }
 
-    /// Slot geometry arrives asynchronously on the first compact layout. Re-evaluate the
-    /// current pointer when it arrives so a stationary pointer over a real slot is admitted
-    /// without waiting for another mouse-move event.
-    private func reconcileCompactHover() {
+    /// Consume only a real `.active` event that arrived before the first slot measurement.
+    /// Later width changes keep readiness `true`, so they cannot synthesize an expand.
+    private func reconcilePendingCompactHover(from wasReady: Bool, to isReady: Bool) {
+        guard
+            let location = compactHoverAdmission.measurementsChanged(
+                from: wasReady,
+                to: isReady
+            )
+        else { return }
         guard nook.state == .compact else { return }
-        let isInsideInteractionRegion = compactHoverTarget?.contains(screenPoint: NSEvent.mouseLocation) == true
+        admitHover(at: location)
+    }
+
+    private func admitHover(at panelLocation: CGPoint) {
+        let isInsideInteractionRegion: Bool
+        switch nook.state {
+            case .compact:
+                isInsideInteractionRegion =
+                    compactHoverMeasurementsReady
+                    && compactGeometry.contains(panelLocation, in: nook.panelSize)
+            case .expanded:
+                isInsideInteractionRegion = true
+            case .hidden:
+                isInsideInteractionRegion = false
+        }
         nook.updateHoverState(true, withinInteractionRegion: isInsideInteractionRegion)
     }
 
@@ -337,7 +365,10 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                 )
                 .offset(x: nook.state == .compact ? -compactXOffset : 0)
         }
-        .padding(.horizontal, topCornerRadius)
+        .padding(
+            .horizontal,
+            nook.state == .compact ? compactGeometry.horizontalPadding : topCornerRadius
+        )
         .fixedSize()
         .frame(minWidth: minWidth, minHeight: nook.notchSize.height)
     }
@@ -346,10 +377,17 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         HStack(spacing: 0) {
             if nook.state == .compact, !nook.disableCompactLeading {
                 nook.compactLeadingContent
-                    .safeAreaInset(edge: .leading, spacing: 0) { Color.clear.frame(width: 8) }
-                    .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 4) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 8) }
+                    .safeAreaInset(edge: .leading, spacing: 0) {
+                        Color.clear.frame(width: NookCompactGeometry.slotHorizontalInset)
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: NookCompactGeometry.slotTopInset)
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: NookCompactGeometry.slotBottomInset)
+                    }
                     .onGeometryChange(for: CGFloat.self, of: \.size.width) {
+                        guard nook.state == .compact, $0.isFinite, $0 >= 0 else { return }
                         compactLeadingWidth = $0
                         hasMeasuredCompactLeading = true
                     }
@@ -362,14 +400,21 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             // straddle the physical notch. Floating mode: no notch - just a small gap
             // keeping the two slots from touching inside the pill.
             Spacer()
-                .frame(width: isFloating ? 8 : nook.notchSize.width)
+                .frame(width: compactGeometry.gapWidth)
 
             if nook.state == .compact, !nook.disableCompactTrailing {
                 nook.compactTrailingContent
-                    .safeAreaInset(edge: .trailing, spacing: 0) { Color.clear.frame(width: 8) }
-                    .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 4) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 8) }
+                    .safeAreaInset(edge: .trailing, spacing: 0) {
+                        Color.clear.frame(width: NookCompactGeometry.slotHorizontalInset)
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        Color.clear.frame(height: NookCompactGeometry.slotTopInset)
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear.frame(height: NookCompactGeometry.slotBottomInset)
+                    }
                     .onGeometryChange(for: CGFloat.self, of: \.size.width) {
+                        guard nook.state == .compact, $0.isFinite, $0 >= 0 else { return }
                         compactTrailingWidth = $0
                         hasMeasuredCompactTrailing = true
                     }
@@ -381,10 +426,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         .frame(height: nook.notchSize.height)
         // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` -
         // they cannot change at runtime, so no `.onChange` reconciliation is needed.
-        // The `@State` `compactLeadingWidth`/`compactTrailingWidth` retain their last
-        // measured value when the slot views disappear (SwiftUI doesn't fire
-        // `onGeometryChange` for a vanishing view), but the values are only consulted
-        // while the slots are present, so the stale carry-over is benign.
+        // Width values retain their last measurement while the slot views disappear,
+        // but readiness resets on exit from compact. A later compact cycle therefore
+        // waits for fresh geometry before admitting hover against those values.
     }
 
     private func expandedContent() -> some View {
