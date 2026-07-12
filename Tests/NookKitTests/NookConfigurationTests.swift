@@ -100,6 +100,7 @@ final class NookConfigurationTests: XCTestCase {
         let configuration = NookConfiguration()
 
         XCTAssertNil(configuration.topBar.trailingItems)
+        XCTAssertNil(configuration.topBar.onSettingsRequest)
     }
 
     /// `setTopBarTrailingItems` installs host trailing-cluster actions, and invoking the
@@ -162,6 +163,22 @@ final class NookConfigurationTests: XCTestCase {
         coordinator.showSettings()
 
         XCTAssertEqual(coordinator.appState.viewMode, .settings)
+    }
+
+    /// A host may keep the built-in Settings implementation registered while routing
+    /// the public gear/menu entry point to its own standalone window.
+    @MainActor
+    func testShowSettingsDelegatesToHostRequestHandler() {
+        final class InvocationFlag: @unchecked Sendable { var wasInvoked = false }
+        let flag = InvocationFlag()
+        var configuration = NookConfiguration()
+        configuration.topBar.onSettingsRequest = { flag.wasInvoked = true }
+
+        let coordinator = AppCoordinator(configuration: configuration)
+        coordinator.showSettings()
+
+        XCTAssertTrue(flag.wasInvoked)
+        XCTAssertEqual(coordinator.appState.viewMode, .home)
     }
 
     // MARK: - Surface customization seams

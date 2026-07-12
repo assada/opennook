@@ -29,6 +29,10 @@ struct NookTopBar: View {
     /// breadcrumb is moot. See ``NookConfiguration/showsSettings``.
     let showsSettings: Bool
 
+    /// Host-owned Settings entry point. `nil` preserves the framework's in-panel
+    /// home/settings toggle; non-`nil` delegates the gear to the host.
+    let onSettingsRequest: (@Sendable @MainActor () -> Void)?
+
     /// Host actions for the trailing cluster, rendered left of the keep-open lock and
     /// gear. `nil` (the default) leaves the cluster as just the framework's lock/gear.
     /// See ``NookTopBarConfiguration/trailingItems``.
@@ -166,11 +170,15 @@ struct NookTopBar: View {
                     activeColor: chromeInteractionAccent,
                     help: labels.settingsHelp
                 ) {
-                    withAnimation(motion.viewModeChange) {
-                        if appState.isSettingsView {
-                            appState.showHome()
-                        } else {
-                            appState.showSettings()
+                    if let onSettingsRequest {
+                        onSettingsRequest()
+                    } else {
+                        withAnimation(motion.viewModeChange) {
+                            if appState.isSettingsView {
+                                appState.showHome()
+                            } else {
+                                appState.showSettings()
+                            }
                         }
                     }
                 }

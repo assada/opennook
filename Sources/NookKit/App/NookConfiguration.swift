@@ -295,6 +295,12 @@ public struct NookTopBarConfiguration: Sendable {
     /// surface stays on the home view.
     public var showsSettings: Bool
 
+    /// Optional host-owned Settings entry point. When set, the top-bar gear and the
+    /// menu-bar Settings item invoke this action instead of navigating to the framework's
+    /// built-in Settings surface. Leaving it `nil` preserves the default in-panel Settings
+    /// behavior and keeps all existing host sections reachable exactly as before.
+    public var onSettingsRequest: (@Sendable @MainActor () -> Void)?
+
     /// Whether the framework's transient status banner (driven by ``AppState/status``)
     /// renders under the top bar. Defaults to `true`. Set to `false` to suppress the
     /// framework banner - e.g. a host surfacing status inside its own home content.
@@ -346,6 +352,7 @@ public struct NookTopBarConfiguration: Sendable {
     public init(
         showsTopBar: Bool = true,
         showsSettings: Bool = true,
+        onSettingsRequest: (@Sendable @MainActor () -> Void)? = nil,
         showsStatusBanner: Bool = true,
         leadingTitle: @escaping @Sendable (AppState) -> String = { _ in "Home" },
         leadingIcon: String? = nil,
@@ -354,6 +361,7 @@ public struct NookTopBarConfiguration: Sendable {
     ) {
         self.showsTopBar = showsTopBar
         self.showsSettings = showsSettings
+        self.onSettingsRequest = onSettingsRequest
         self.showsStatusBanner = showsStatusBanner
         self.leadingTitle = leadingTitle
         self.leadingIcon = leadingIcon

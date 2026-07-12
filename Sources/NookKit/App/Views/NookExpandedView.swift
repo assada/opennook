@@ -227,6 +227,7 @@ public struct NookExpandedView: View {
                 leadingTitle: topBar.leadingTitle,
                 leadingIcon: topBar.leadingIcon,
                 showsSettings: topBar.showsSettings,
+                onSettingsRequest: topBar.onSettingsRequest,
                 trailingItems: topBar.trailingItems,
                 width: topBar.width,
                 moduleSwitcher: moduleSwitcher
@@ -241,6 +242,7 @@ public struct NookExpandedView: View {
                 leadingTitle: topBar.leadingTitle,
                 leadingIcon: topBar.leadingIcon,
                 showsSettings: topBar.showsSettings,
+                onSettingsRequest: topBar.onSettingsRequest,
                 trailingItems: topBar.trailingItems,
                 width: topBar.width,
                 moduleSwitcher: moduleSwitcher

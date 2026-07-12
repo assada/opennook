@@ -918,6 +918,10 @@ public final class AppCoordinator: ObservableObject {
             showNook()
             return
         }
+        if let onSettingsRequest = configuration.topBar.onSettingsRequest {
+            onSettingsRequest()
+            return
+        }
         appState.showSettings()
         showNook()
     }
