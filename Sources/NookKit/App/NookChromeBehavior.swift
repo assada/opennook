@@ -19,8 +19,8 @@ public enum NookEscapeBehavior: Sendable {
 }
 
 /// Host-process-global *chrome behavior* knobs that the framework otherwise hardcodes:
-/// hover side-effects, the cold-launch greeting, and how appearance preferences map to
-/// the surface backdrop.
+/// hover side-effects, the cold-launch greeting, compact idle treatment, and how
+/// appearance preferences map to the surface backdrop.
 ///
 /// These are distinct from ``NookConfiguration``'s per-surface content/theme seams -
 /// they describe how the single shared notch surface *behaves*, so they live at the
@@ -58,6 +58,13 @@ public struct NookChromeBehavior: Sendable {
     /// ``NookEscapeBehavior/compact`` to preserve the framework's original behavior.
     public var escapeBehavior: NookEscapeBehavior
 
+    /// Optional developer-configured dimming for the left and right compact slots.
+    /// `nil` preserves full opacity indefinitely. Hosts can report product-specific
+    /// activity through ``AppCoordinator/noteCompactActivity()`` or the
+    /// ``EnvironmentValues/nookCompactActivity`` action. Read once when the surface is
+    /// built; changing this value does not reconfigure an already-running surface.
+    public var compactIdleDimming: NookCompactIdleDimming?
+
     /// Overrides how appearance preferences map to the surface backdrop. `nil` (the
     /// default) uses the framework mapping (``NookBackdropMapping/notchBackdrop(preferences:effectiveColorScheme:reduceTransparency:)``):
     /// solid black/white for `.solid` or Reduce Transparency, otherwise a `.sidebar`
@@ -69,12 +76,14 @@ public struct NookChromeBehavior: Sendable {
         hoverBehavior: NookHoverBehavior = [],
         showsLaunchShimmer: Bool = true,
         escapeBehavior: NookEscapeBehavior = .compact,
-        backdrop: BackdropResolver? = nil
+        backdrop: BackdropResolver? = nil,
+        compactIdleDimming: NookCompactIdleDimming? = nil
     ) {
         self.hoverBehavior = hoverBehavior
         self.showsLaunchShimmer = showsLaunchShimmer
         self.escapeBehavior = escapeBehavior
         self.backdrop = backdrop
+        self.compactIdleDimming = compactIdleDimming
     }
 
     /// The framework defaults - what ships when a host sets no chrome behavior. Using

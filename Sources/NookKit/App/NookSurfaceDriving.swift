@@ -89,6 +89,9 @@ protocol NookSurfaceDriving: AnyObject {
 
     /// Play a one-shot peripheral cue along the chrome perimeter.
     func playFeedback(_ effect: NookFeedback, tint: Color, duration: TimeInterval, repeats: Bool)
+
+    /// Restore compact slot content and restart its developer-configured idle deadline.
+    func noteCompactActivity()
 }
 
 extension NookSurfaceDriving {

@@ -208,6 +208,7 @@ public final class AppCoordinator: ObservableObject {
                     topCornerRadius: NookAppearance.expandedTopCornerRadius,
                     bottomCornerRadius: NookAppearance.expandedBottomCornerRadius
                 ),
+            compactIdleDimming: moduleHost.chromeBehavior.compactIdleDimming,
             expanded: {
                 AnyView(
                     ModuleRouterExpandedView(
@@ -462,6 +463,9 @@ public final class AppCoordinator: ObservableObject {
             _ = moduleHost.switchModule(to: id)
         }
         guard moduleHost.activeModuleID == id else { return }
+        if surface.state == .compact {
+            surface.noteCompactActivity()
+        }
 
         // 4. Re-wire surface hooks in this same critical section.
         applyModuleHooks(moduleHost.configuration)
@@ -902,6 +906,13 @@ public final class AppCoordinator: ObservableObject {
             self.surface.staysExpandedOnHoverExit = self.appState.keepNookOpen
             await self.surface.expand(on: nil)
         }
+    }
+
+    /// Restores developer-configured compact slot dimming without opening or otherwise
+    /// changing the surface. Use this for host activity the generic framework cannot
+    /// infer, such as a background result arriving or a compact counter changing.
+    public func noteCompactActivity() {
+        surface.noteCompactActivity()
     }
 
     /// Switches to the home view and expands the surface.

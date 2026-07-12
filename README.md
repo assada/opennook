@@ -245,6 +245,32 @@ configuration.chromeBehavior = NookChromeBehavior(
 )
 ```
 
+Compact slot dimming is an opt-in developer API; it stays disabled (`nil`) by
+default. Enable the recommended timing and opacity before constructing the
+coordinator, or provide a custom `NookCompactIdleDimming` value:
+
+```swift
+configuration.chromeBehavior.compactIdleDimming = .standard
+```
+
+Hover, lifecycle changes, feedback, drag entry, and module switches restore full
+opacity automatically. Report product activity that OpenNook cannot infer through
+the coordinator, or from compact SwiftUI content through the environment action:
+
+```swift
+configuration.onReady = { coordinator in
+    backgroundActivity.onEvent = { coordinator.noteCompactActivity() }
+}
+
+@Environment(\.nookCompactActivity) private var noteCompactActivity
+
+StatusGlyph()
+    .onChange(of: model.status) { noteCompactActivity() }
+```
+
+`chromeBehavior` is captured when the surface is constructed; changing its idle
+dimming value on an already-running coordinator does not reconfigure that surface.
+
 **Labels, metrics, motion.** Localize chrome strings, tune the few fixed layout
 values, retune the in-panel springs:
 

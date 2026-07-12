@@ -121,6 +121,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         notchContent()
             .background { notchBackdrop() }
             .overlay { feedbackOverlay() }
+            .environment(\.nookCompactActivity, compactActivityAction)
             .compositingGroup()
             .clipShape(notchShape)
             .contentShape(notchShape)
@@ -192,6 +193,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             leadingWidth: nook.disableCompactLeading ? 0 : compactLeadingWidth,
             trailingWidth: nook.disableCompactTrailing ? 0 : compactTrailingWidth
         )
+    }
+
+    private var compactActivityAction: NookCompactActivityAction {
+        NookCompactActivityAction { [weak nook] in
+            nook?.noteCompactActivity()
+        }
     }
 
     private var compactHoverMeasurementsReady: Bool {
@@ -421,6 +428,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                     )
             }
         }
+        .opacity(nook.compactContentOpacity)
         .frame(height: nook.notchSize.height)
         // `disableCompactLeading/Trailing` are construction-time `let`s on `Nook` -
         // they cannot change at runtime, so no `.onChange` reconciliation is needed.

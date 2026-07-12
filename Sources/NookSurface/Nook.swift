@@ -71,6 +71,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
 
     public let style: NookStyle
     public let hoverBehavior: NookHoverBehavior
+    public let compactIdleDimming: NookCompactIdleDimming?
 
     public var transitionConfiguration = NookTransitionConfiguration()
 
@@ -116,6 +117,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     @Published private(set) var notchSize: CGSize = .zero
     @Published private(set) var menubarHeight: CGFloat = 0
     @Published private(set) var panelSize: CGSize = .zero
+    @Published var compactContentOpacity: Double = 1
 
     /// Layout resolved for the current window's screen - `.notch` or `.floating`.
     /// Recomputed every time the panel window is built (see `initializeWindow`); drives
@@ -191,6 +193,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         didSet {
             let inFlight: Bool
             if case .idle = dragSession { inFlight = false } else { inFlight = true }
+            if inFlight, !isDragInFlight { noteCompactActivity() }
             if isDragInFlight != inFlight { isDragInFlight = inFlight }
         }
     }
@@ -260,6 +263,12 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// by moving ``layoutGraceDeadline`` while one worker remains active.
     private var layoutGraceTask: Task<Void, Never>?
 
+    /// One movable compact-idle deadline and its sole worker. Activity pushes the
+    /// deadline forward instead of creating a new task on every signal.
+    var compactIdleDimmingDeadline: ContinuousClock.Instant?
+    var compactIdleDimmingTask: Task<Void, Never>?
+    var compactIdleDimmingSurfaceState: NookState = .hidden
+
     /// A hover exit landed while layout grace was active. The `.ended` event is gone by
     /// the time grace expires, so the expiry must replay the collapse itself - otherwise
     /// the surface stays expanded until the next full hover enter/exit cycle.
@@ -270,12 +279,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     public init(
         hoverBehavior: NookHoverBehavior = .all,
         style: NookStyle = .standard,
+        compactIdleDimming: NookCompactIdleDimming? = nil,
         @ViewBuilder expanded: @escaping () -> Expanded,
         @ViewBuilder compactLeading: @escaping () -> CompactLeading = { EmptyView() },
         @ViewBuilder compactTrailing: @escaping () -> CompactTrailing = { EmptyView() }
     ) {
         self.hoverBehavior = hoverBehavior
         self.style = style
+        self.compactIdleDimming = compactIdleDimming
         self.expandedContent = expanded()
         self.compactLeadingContent = compactLeading()
         self.compactTrailingContent = compactTrailing()
@@ -286,6 +297,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         observeStateForPendingFeedback()
         observeStateForLifecycleHooks()
         observeStateForLayoutGrace()
+        observeStateForCompactIdleDimming()
     }
 
     /// Internal designated init for the no-compact-content case. The `disableCompact*`
@@ -294,6 +306,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     private init(
         hoverBehavior: NookHoverBehavior,
         style: NookStyle,
+        compactIdleDimming: NookCompactIdleDimming?,
         expanded: @escaping () -> Expanded,
         compactLeading: @escaping () -> CompactLeading,
         compactTrailing: @escaping () -> CompactTrailing,
@@ -302,6 +315,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     ) {
         self.hoverBehavior = hoverBehavior
         self.style = style
+        self.compactIdleDimming = compactIdleDimming
         self.expandedContent = expanded()
         self.compactLeadingContent = compactLeading()
         self.compactTrailingContent = compactTrailing()
@@ -312,17 +326,20 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         observeStateForPendingFeedback()
         observeStateForLifecycleHooks()
         observeStateForLayoutGrace()
+        observeStateForCompactIdleDimming()
     }
 
     /// Convenience for the no-compact-content case. Compact mode collapses to hide.
     public convenience init(
         hoverBehavior: NookHoverBehavior = [.keepVisible],
         style: NookStyle = .standard,
+        compactIdleDimming: NookCompactIdleDimming? = nil,
         @ViewBuilder expanded: @escaping () -> Expanded
     ) where CompactLeading == EmptyView, CompactTrailing == EmptyView {
         self.init(
             hoverBehavior: hoverBehavior,
             style: style,
+            compactIdleDimming: compactIdleDimming,
             expanded: expanded,
             compactLeading: { EmptyView() },
             compactTrailing: { EmptyView() },
@@ -392,6 +409,18 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .store(in: &cancellables)
     }
 
+    /// Keep compact-idle timing tied to the surface lifecycle rather than an ephemeral
+    /// hosting view. `$state` publishes during `willSet`, so the emitted state is passed
+    /// through instead of re-reading the previous `self.state` value.
+    private func observeStateForCompactIdleDimming() {
+        $state
+            .removeDuplicates()
+            .sink { [weak self] newState in
+                self?.handleCompactIdleDimmingStateChange(to: newState)
+            }
+            .store(in: &cancellables)
+    }
+
     /// The screen the chrome should occupy when no explicit screen is supplied.
     /// Consults the host-supplied ``screenProvider`` first, then the window's current
     /// screen, then the system. `nil` only when no display is attached at all.
@@ -446,7 +475,16 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// hover state is resolved before firing haptics or claiming a transition.
     func updateHoverState(_ pointerActive: Bool, withinInteractionRegion: Bool = true) {
         let hovering = pointerActive && withinInteractionRegion
-        guard state != .hidden, hovering != isHovering else { return }
+
+        // Continuous valid pointer activity keeps the compact slots legible even after
+        // the logical hover state has already become `true`. Rejected presentation-tail
+        // events never reach the idle-dimming state machine.
+        if hovering {
+            noteCompactActivity()
+        }
+
+        guard state != .hidden else { return }
+        guard hovering != isHovering else { return }
 
         isHovering = hovering
 
@@ -580,6 +618,7 @@ extension Nook {
         repeats: Bool = false
     ) {
         guard effect != .none, NookFeedbackEvent.isPlayableDuration(duration) else { return }
+        noteCompactActivity()
         let event = NookFeedbackEvent(
             id: UUID(),
             startedAt: Date(),

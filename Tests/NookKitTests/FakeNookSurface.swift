@@ -9,6 +9,7 @@ import AppKit
 import Combine
 import NookSurface
 import SwiftUI
+
 @testable import NookKit
 
 /// A windowless ``NookSurfaceDriving`` stand-in for exercising ``AppCoordinator``
@@ -76,6 +77,9 @@ final class FakeNookSurface: NookSurfaceDriving {
     /// Records every `playFeedback` request.
     private(set) var feedbackCount = 0
 
+    /// Records explicit compact-chrome activity forwarded by the coordinator.
+    private(set) var compactActivityCount = 0
+
     func expand(on screen: NSScreen?) async { transition(to: .expanded) }
     func compact(on screen: NSScreen?) async { transition(to: .compact) }
     func hide() async { transition(to: .hidden) }
@@ -84,16 +88,20 @@ final class FakeNookSurface: NookSurfaceDriving {
         feedbackCount += 1
     }
 
-    /// Applies a state change, records it, and fires the matching lifecycle hook - 
+    func noteCompactActivity() {
+        compactActivityCount += 1
+    }
+
+    /// Applies a state change, records it, and fires the matching lifecycle hook -
     /// mirroring the real surface, whose hooks fire on every distinct transition.
     private func transition(to newState: NookState) {
         guard newState != stateSubject.value else { return }
         stateSubject.send(newState)
         transitions.append(newState)
         switch newState {
-        case .expanded: onExpand?()
-        case .compact: onCompact?()
-        case .hidden: onHide?()
+            case .expanded: onExpand?()
+            case .compact: onCompact?()
+            case .hidden: onHide?()
         }
     }
 }
