@@ -168,8 +168,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         }
         return .asymmetric(
             insertion: .identity,
-            removal: .offset(y: nook.attachedAccessoryStyle.motion.insertionOffset / 2)
-                .combined(with: .opacity)
+            removal: .nookAttachedAccessoryCollapse(
+                motion: nook.attachedAccessoryStyle.motion
+            )
         )
     }
 

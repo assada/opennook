@@ -18,8 +18,22 @@ struct NookAttachedAccessoryHost: View {
     }
 
     private var isPresented: Bool {
-        let hasContent = contentSize.width > 0 && contentSize.height > 0
         return hasContent && (requestedPresentation ?? true)
+    }
+
+    private var hasContent: Bool {
+        contentSize.width > 0 && contentSize.height > 0
+    }
+
+    private var currentWidth: CGFloat {
+        guard hasContent else { return 0 }
+        return isPresented
+            ? presentedSize.width
+            : presentedSize.width * style.motion.resolvedCollapsedWidthFraction
+    }
+
+    private var currentHeight: CGFloat {
+        isPresented ? presentedSize.height + style.gap : 0
     }
 
     private var presentedSize: CGSize {
@@ -41,27 +55,28 @@ struct NookAttachedAccessoryHost: View {
         content
             .fixedSize()
             .onGeometryChange(for: CGSize.self, of: \.size) { contentSize = $0 }
-            .padding(.top, isPresented ? style.contentInsets.top : 0)
-            .padding(.bottom, isPresented ? style.contentInsets.bottom : 0)
-            .padding(.leading, isPresented ? style.contentInsets.leading : 0)
-            .padding(.trailing, isPresented ? style.contentInsets.trailing : 0)
+            .padding(.top, hasContent ? style.contentInsets.top : 0)
+            .padding(.bottom, hasContent ? style.contentInsets.bottom : 0)
+            .padding(.leading, hasContent ? style.contentInsets.leading : 0)
+            .padding(.trailing, hasContent ? style.contentInsets.trailing : 0)
             .background {
-                if isPresented {
+                if hasContent {
                     NookBackdropView(backdrop: backdrop, shape: shape)
-                        .transition(.opacity)
                 }
             }
             .clipShape(shape)
+            // Keep the visual separation from the main nook throughout the reveal.
+            // The outer frame clips the transparent gap and the shelf together, so the
+            // accessory never reads as physically fused to the primary surface.
+            .padding(.top, hasContent ? style.gap : 0)
             .frame(
-                width: isPresented ? presentedSize.width : 0,
-                height: isPresented ? presentedSize.height : 0,
+                width: currentWidth,
+                height: currentHeight,
                 alignment: .top
             )
             .clipped()
             .contentShape(shape)
-            .opacity(isPresented ? 1 : 0)
             .offset(y: isPresented || reduceMotion ? 0 : style.motion.insertionOffset)
-            .padding(.top, isPresented ? style.gap : 0)
             .allowsHitTesting(isPresented)
             .accessibilityHidden(!isPresented)
             .animation(presentationAnimation, value: isPresented)
