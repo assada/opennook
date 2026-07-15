@@ -209,6 +209,7 @@ public final class AppCoordinator: ObservableObject {
                     bottomCornerRadius: NookAppearance.expandedBottomCornerRadius
                 ),
             compactIdleDimming: moduleHost.chromeBehavior.compactIdleDimming,
+            attachedAccessoryStyle: moduleHost.configuration.attachedAccessory?.style ?? .standard,
             expanded: {
                 AnyView(
                     ModuleRouterExpandedView(
@@ -236,6 +237,14 @@ public final class AppCoordinator: ObservableObject {
                         moduleHost: moduleHost,
                         appState: appState,
                         slot: .trailing
+                    )
+                )
+            },
+            attachedAccessory: {
+                AnyView(
+                    ModuleRouterAttachedAccessoryView(
+                        moduleHost: moduleHost,
+                        appState: appState
                     )
                 )
             }

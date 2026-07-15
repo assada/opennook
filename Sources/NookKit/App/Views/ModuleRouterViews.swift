@@ -97,3 +97,20 @@ struct ModuleRouterCompactView: View {
         .environment(\.nookChromeTypography, configuration.typography)
     }
 }
+
+/// Routes the active module's semantic accessory content into framework-owned chrome.
+struct ModuleRouterAttachedAccessoryView: View {
+    @ObservedObject var moduleHost: ModuleHost
+    @ObservedObject var appState: AppState
+
+    var body: some View {
+        let configuration = moduleHost.configuration
+        if let accessory = configuration.attachedAccessory {
+            accessory.content()
+                .environmentObject(appState)
+                .environment(\.appServices, moduleHost.activeServices)
+                .environment(\.nookResolvedTheme, configuration.theme(appState))
+                .id(moduleHost.activeModuleID)
+        }
+    }
+}

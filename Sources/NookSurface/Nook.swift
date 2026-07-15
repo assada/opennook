@@ -103,6 +103,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     let expandedContent: Expanded
     let compactLeadingContent: CompactLeading
     let compactTrailingContent: CompactTrailing
+    let attachedAccessoryContent: AnyView?
+    let attachedAccessoryStyle: NookAttachedAccessoryStyle
     /// Construction-time flags set by the no-compact convenience init. Immutable so
     /// they can't be flipped mid-flight and trip the view's transition heuristics -
     /// the no-compact case is a build-time choice, not runtime state.
@@ -280,9 +282,11 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         hoverBehavior: NookHoverBehavior = .all,
         style: NookStyle = .standard,
         compactIdleDimming: NookCompactIdleDimming? = nil,
+        attachedAccessoryStyle: NookAttachedAccessoryStyle = .standard,
         @ViewBuilder expanded: @escaping () -> Expanded,
         @ViewBuilder compactLeading: @escaping () -> CompactLeading = { EmptyView() },
-        @ViewBuilder compactTrailing: @escaping () -> CompactTrailing = { EmptyView() }
+        @ViewBuilder compactTrailing: @escaping () -> CompactTrailing = { EmptyView() },
+        @ViewBuilder attachedAccessory: @escaping () -> AnyView? = { nil }
     ) {
         self.hoverBehavior = hoverBehavior
         self.style = style
@@ -290,6 +294,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         self.expandedContent = expanded()
         self.compactLeadingContent = compactLeading()
         self.compactTrailingContent = compactTrailing()
+        self.attachedAccessoryContent = attachedAccessory()
+        self.attachedAccessoryStyle = attachedAccessoryStyle
         self.disableCompactLeading = false
         self.disableCompactTrailing = false
 
@@ -307,9 +313,11 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         hoverBehavior: NookHoverBehavior,
         style: NookStyle,
         compactIdleDimming: NookCompactIdleDimming?,
+        attachedAccessoryStyle: NookAttachedAccessoryStyle,
         expanded: @escaping () -> Expanded,
         compactLeading: @escaping () -> CompactLeading,
         compactTrailing: @escaping () -> CompactTrailing,
+        attachedAccessory: @escaping () -> AnyView?,
         disableCompactLeading: Bool,
         disableCompactTrailing: Bool
     ) {
@@ -319,6 +327,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         self.expandedContent = expanded()
         self.compactLeadingContent = compactLeading()
         self.compactTrailingContent = compactTrailing()
+        self.attachedAccessoryContent = attachedAccessory()
+        self.attachedAccessoryStyle = attachedAccessoryStyle
         self.disableCompactLeading = disableCompactLeading
         self.disableCompactTrailing = disableCompactTrailing
 
@@ -334,15 +344,18 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         hoverBehavior: NookHoverBehavior = [.keepVisible],
         style: NookStyle = .standard,
         compactIdleDimming: NookCompactIdleDimming? = nil,
+        attachedAccessoryStyle: NookAttachedAccessoryStyle = .standard,
         @ViewBuilder expanded: @escaping () -> Expanded
     ) where CompactLeading == EmptyView, CompactTrailing == EmptyView {
         self.init(
             hoverBehavior: hoverBehavior,
             style: style,
             compactIdleDimming: compactIdleDimming,
+            attachedAccessoryStyle: attachedAccessoryStyle,
             expanded: expanded,
             compactLeading: { EmptyView() },
             compactTrailing: { EmptyView() },
+            attachedAccessory: { nil },
             disableCompactLeading: true,
             disableCompactTrailing: true
         )

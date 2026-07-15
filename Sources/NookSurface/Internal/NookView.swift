@@ -118,6 +118,26 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     /// hovering in the empty space below a compact nook triggers the hover-grow animation.
     /// Hit-testing the same `NookShape` we render confines hover to the visible chrome.
     var body: some View {
+        VStack(spacing: 0) {
+            notchChrome
+
+            if nook.state == .expanded, let accessory = nook.attachedAccessoryContent {
+                NookAttachedAccessoryHost(
+                    content: accessory,
+                    backdrop: nook.backdrop,
+                    style: nook.attachedAccessoryStyle
+                )
+                .transition(attachedAccessoryTransition)
+            }
+        }
+        .fixedSize()
+        .onContinuousHover(coordinateSpace: .global, perform: handleHover)
+        .padding(.top, floatingTopInset)
+        .animation(nook.effectiveConversionAnimation, value: nook.state)
+        .animation(nook.effectiveConversionAnimation, value: [compactLeadingWidth, compactTrailingWidth])
+    }
+
+    private var notchChrome: some View {
         notchContent()
             .background { notchBackdrop() }
             .overlay { feedbackOverlay() }
@@ -125,7 +145,6 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             .compositingGroup()
             .clipShape(notchShape)
             .contentShape(notchShape)
-            .onContinuousHover(coordinateSpace: .global, perform: handleHover)
             .onChange(of: compactHoverMeasurementsReady) { wasReady, isReady in
                 reconcilePendingCompactHover(from: wasReady, to: isReady)
             }
@@ -137,9 +156,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             // Floating mode drops the panel below the menu bar; notch mode keeps it
             // flush to the top edge (inset 0). Applied outside the clipped chrome so it
             // shifts the whole shape without distorting it or the hover region.
-            .padding(.top, floatingTopInset)
-            .animation(nook.effectiveConversionAnimation, value: nook.state)
-            .animation(nook.effectiveConversionAnimation, value: [compactLeadingWidth, compactTrailingWidth])
+    }
+
+    private var attachedAccessoryTransition: AnyTransition {
+        if reduceMotion {
+            return .opacity
+        }
+        return .offset(y: nook.attachedAccessoryStyle.insertionOffset)
+            .combined(with: .opacity)
     }
 
     /// Peripheral cue overlay. Sits above backdrop+content but inside the compositing group,
@@ -239,115 +263,7 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
     }
 
     private func notchBackdrop() -> some View {
-        Group {
-            switch nook.backdrop {
-                case .vibrancy(let spec):
-                    ZStack {
-                        VisualEffectView(
-                            material: spec.material,
-                            blendingMode: spec.blendingMode
-                        )
-                        if spec.darkenOpacity > 0 {
-                            Color.black.opacity(spec.darkenOpacity)
-                        }
-                    }
-                case .solid(let color):
-                    color
-                case .liquidGlass(let glass):
-                    liquidGlassBackdrop(glass)
-            }
-        }
-    }
-
-    /// Liquid Glass backdrop. Apple's real glass material on macOS 26 Tahoe and later;
-    /// a layered approximation on earlier systems. Both shape the glass to the same
-    /// ``NookShape`` the chrome already clips to, so the rim and the eared/floating
-    /// outline stay in register.
-    @ViewBuilder
-    private func liquidGlassBackdrop(_ glass: NookBackdrop.LiquidGlass) -> some View {
-        // `Glass` / `.glassEffect` exist only in the macOS 26 SDK (Xcode 26+, Swift 6.2).
-        // `@available` is a runtime gate and still needs those symbols present in the SDK
-        // being compiled against, so an older Xcode cannot build the real path at all.
-        // Gate it at compile time too: an older toolchain uses the approximation
-        // unconditionally, while the macOS 26 SDK keeps the real material (runtime-gated
-        // to macOS 26). This lets a consumer on an earlier Xcode still build the package.
-        #if compiler(>=6.2)
-            if #available(macOS 26.0, *) {
-                realLiquidGlass(glass)
-            } else {
-                approximateLiquidGlass(glass)
-            }
-        #else
-            approximateLiquidGlass(glass)
-        #endif
-    }
-
-    #if compiler(>=6.2)
-        @available(macOS 26.0, *)
-        @ViewBuilder
-        private func realLiquidGlass(_ glass: NookBackdrop.LiquidGlass) -> some View {
-            let tinted: Glass = {
-                guard let tint = glass.tint, glass.tintStrength > 0 else { return .regular }
-                return Glass.regular.tint(tint.opacity(glass.tintStrength))
-            }()
-            Color.clear
-                .glassEffect(tinted, in: notchShape)
-                // The legibility pass is whatever the spec carries - the surface adds no
-                // darken of its own on top of Apple's self-contrasting material.
-                .overlay { glassShading(glass) }
-        }
-    #endif
-
-    /// The host-supplied legibility shading, rendered as a gradient. `nil` shading draws
-    /// nothing, leaving the glass pristine. The gradient, its stops, and its direction all
-    /// come from the ``NookBackdrop/LiquidGlass`` spec - the surface never substitutes its
-    /// own, so a host can shape the falloff however it likes.
-    @ViewBuilder
-    private func glassShading(_ glass: NookBackdrop.LiquidGlass) -> some View {
-        if let shading = glass.shading {
-            LinearGradient(
-                gradient: shading.gradient,
-                startPoint: shading.startPoint,
-                endPoint: shading.endPoint
-            )
-        }
-    }
-
-    /// Pre-Tahoe approximation: a glassy material, an optional tint, a legibility darken,
-    /// then the specular treatment that actually reads as "glass" - a top-down sheen and
-    /// a bright rim traced along ``notchShape``. The outer `.clipShape` trims the rim's
-    /// outer half, leaving an inner highlight along the edge.
-    @ViewBuilder
-    private func approximateLiquidGlass(_ glass: NookBackdrop.LiquidGlass) -> some View {
-        ZStack {
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-
-            if let tint = glass.tint, glass.tintStrength > 0 {
-                tint.opacity(glass.tintStrength)
-            }
-
-            glassShading(glass)
-
-            if glass.highlightStrength > 0 {
-                LinearGradient(
-                    colors: [Color.white.opacity(0.16 * glass.highlightStrength), .clear],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-                notchShape
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.5 * glass.highlightStrength),
-                                Color.white.opacity(0.06 * glass.highlightStrength),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-            }
-        }
+        NookBackdropView(backdrop: nook.backdrop, shape: notchShape)
     }
 
     private func notchContent() -> some View {

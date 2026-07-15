@@ -51,6 +51,11 @@ public struct NookConfiguration: Sendable {
     /// ``setCompactTrailing(_:)`` to set it from a `@ViewBuilder`.
     public var compactTrailing: @Sendable @MainActor () -> AnyView
 
+    /// Optional content attached beneath the expanded nook. OpenNook owns the accessory
+    /// chrome and motion; the host supplies only semantic content. Render `EmptyView`
+    /// while the accessory has nothing to show.
+    public var attachedAccessory: NookAttachedAccessoryConfiguration?
+
     /// Resolves the chrome palette. Defaults to ``NookResolvedTheme/live(appState:)``;
     /// supply a closure returning a host-built ``NookResolvedTheme`` to theme the chrome.
     public var theme: @Sendable @MainActor (AppState) -> NookResolvedTheme
@@ -193,6 +198,7 @@ public struct NookConfiguration: Sendable {
         home = { AnyView(NookPlaceholderHomeView()) }
         compactLeading = { AnyView(NookCompactLeadingView()) }
         compactTrailing = { AnyView(NookCompactTrailingView()) }
+        attachedAccessory = nil
         // Wrapped in a closure literal rather than passed as a bare function reference:
         // the `theme` slot is `@Sendable`, and a closure that captures nothing and just
         // forwards to the `@MainActor` `live(appState:)` satisfies that cleanly.
@@ -225,6 +231,14 @@ public struct NookConfiguration: Sendable {
         @ViewBuilder _ content: @escaping @Sendable @MainActor () -> Content
     ) {
         compactTrailing = { AnyView(content()) }
+    }
+
+    /// Registers semantic content in the framework-owned attached accessory slot.
+    public mutating func setAttachedAccessory<Content: View & Sendable>(
+        style: NookAttachedAccessoryStyle = .standard,
+        @ViewBuilder _ content: @escaping @Sendable @MainActor () -> Content
+    ) {
+        attachedAccessory = NookAttachedAccessoryConfiguration(style: style, content: content)
     }
 
     /// Registers a custom Settings surface from a `@ViewBuilder` closure, replacing the

@@ -31,6 +31,7 @@ final class NookConfigurationTests: XCTestCase {
         XCTAssertNil(configuration.onExpand)
         XCTAssertNil(configuration.onCompact)
         XCTAssertNil(configuration.onHide)
+        XCTAssertNil(configuration.attachedAccessory)
     }
 
     /// A host-supplied theme provider replaces the live one.
@@ -122,6 +123,24 @@ final class NookConfigurationTests: XCTestCase {
         XCTAssertFalse(flag.didBuild, "Building the host view must be lazy until rendered.")
 
         _ = configuration.topBar.trailingItems?()
+        XCTAssertTrue(flag.didBuild)
+    }
+
+    func testAttachedAccessoryClosureIsLazyAndUsesRequestedStyle() {
+        final class InvocationFlag: @unchecked Sendable { var didBuild = false }
+        let flag = InvocationFlag()
+        let style = NookAttachedAccessoryStyle(gap: 6, cornerRadius: 14)
+
+        var configuration = NookConfiguration()
+        configuration.setAttachedAccessory(style: style) { () -> Text in
+            flag.didBuild = true
+            return Text("Update available")
+        }
+
+        XCTAssertEqual(configuration.attachedAccessory?.style, style)
+        XCTAssertFalse(flag.didBuild)
+
+        _ = configuration.attachedAccessory?.content()
         XCTAssertTrue(flag.didBuild)
     }
 
