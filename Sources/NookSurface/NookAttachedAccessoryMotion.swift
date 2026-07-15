@@ -9,6 +9,7 @@ import SwiftUI
 /// the main nook's settling tail instead of appearing to chase it.
 public struct NookAttachedAccessoryMotion: Equatable, Sendable {
     public var insertionOffset: CGFloat
+    public var initialInsertionDelay: TimeInterval
     public var insertionResponse: TimeInterval
     public var insertionDampingFraction: Double
     public var insertionBlendDuration: TimeInterval
@@ -16,12 +17,14 @@ public struct NookAttachedAccessoryMotion: Equatable, Sendable {
 
     public init(
         insertionOffset: CGFloat = -4,
+        initialInsertionDelay: TimeInterval = 0.18,
         insertionResponse: TimeInterval = 0.23,
         insertionDampingFraction: Double = 0.92,
         insertionBlendDuration: TimeInterval = 0.03,
         removalDuration: TimeInterval = 0.14
     ) {
         self.insertionOffset = insertionOffset
+        self.initialInsertionDelay = initialInsertionDelay
         self.insertionResponse = insertionResponse
         self.insertionDampingFraction = insertionDampingFraction
         self.insertionBlendDuration = insertionBlendDuration

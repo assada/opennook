@@ -9,6 +9,7 @@ struct NookAttachedAccessoryHost: View {
     let backdrop: NookBackdrop
     let style: NookAttachedAccessoryStyle
     @State private var contentSize: CGSize = .zero
+    @State private var stagesInitialInsertion = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var shape: RoundedRectangle {
@@ -21,7 +22,10 @@ struct NookAttachedAccessoryHost: View {
 
     private var presentationAnimation: Animation {
         guard !reduceMotion else { return .easeOut(duration: 0.09) }
-        return isPresented ? style.motion.insertionAnimation : style.motion.removalAnimation
+        guard isPresented else { return style.motion.removalAnimation }
+        return stagesInitialInsertion
+            ? style.motion.insertionAnimation.delay(style.motion.initialInsertionDelay)
+            : style.motion.insertionAnimation
     }
 
     var body: some View {
@@ -44,5 +48,12 @@ struct NookAttachedAccessoryHost: View {
             .offset(y: isPresented || reduceMotion ? 0 : style.motion.insertionOffset)
             .padding(.top, isPresented ? style.gap : 0)
             .animation(presentationAnimation, value: isPresented)
+            .task {
+                // The host is mounted as the main nook starts expanding. Content measured
+                // in this short window belongs to the same reveal and should enter near the
+                // end of that motion. Content that appears later remains immediate.
+                try? await Task.sleep(for: .milliseconds(80))
+                stagesInitialInsertion = false
+            }
     }
 }
