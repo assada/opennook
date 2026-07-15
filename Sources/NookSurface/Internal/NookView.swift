@@ -127,6 +127,8 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                     backdrop: nook.backdrop,
                     style: nook.attachedAccessoryStyle,
                     isChromeExpanded: nook.state == .expanded,
+                    collapsedChromeWidth: minWidth,
+                    chromeGeometryAnimation: nook.effectiveClosingAnimation,
                     chromeDismissalRetention: nook.intermediateHideDuration
                 )
             }

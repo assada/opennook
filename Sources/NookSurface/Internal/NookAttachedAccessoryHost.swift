@@ -9,6 +9,8 @@ struct NookAttachedAccessoryHost: View {
     let backdrop: NookBackdrop
     let style: NookAttachedAccessoryStyle
     let isChromeExpanded: Bool
+    let collapsedChromeWidth: CGFloat
+    let chromeGeometryAnimation: Animation
     let chromeDismissalRetention: Duration
     @State private var contentSize: CGSize = .zero
     @State private var requestedPresentation: Bool?
@@ -35,6 +37,12 @@ struct NookAttachedAccessoryHost: View {
         )
     }
 
+    private var retainedWidth: CGFloat {
+        guard occupiesLayout else { return 0 }
+        guard !isChromeExpanded else { return presentedSize.width }
+        return min(max(collapsedChromeWidth, 0), presentedSize.width)
+    }
+
     var body: some View {
         content
             .fixedSize()
@@ -54,9 +62,16 @@ struct NookAttachedAccessoryHost: View {
             // shrinking chrome instead of being frozen by a removal transition.
             .padding(.top, hasContent ? style.gap : 0)
             .frame(
-                width: occupiesLayout ? presentedSize.width : 0,
+                width: retainedWidth,
                 height: occupiesLayout ? presentedSize.height + style.gap : 0,
                 alignment: .top
+            )
+            // Match the nook's horizontal closing geometry while preserving the
+            // shelf's full height. The VStack still owns vertical travel, so there is
+            // no independent slide and no vertical squash.
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.09) : chromeGeometryAnimation,
+                value: isChromeExpanded
             )
             .clipped()
             .contentShape(shape)
