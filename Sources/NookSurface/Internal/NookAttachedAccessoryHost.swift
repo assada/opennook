@@ -8,32 +8,24 @@ struct NookAttachedAccessoryHost: View {
     let content: AnyView
     let backdrop: NookBackdrop
     let style: NookAttachedAccessoryStyle
+    let isChromeExpanded: Bool
+    let chromeDismissalRetention: Duration
     @State private var contentSize: CGSize = .zero
     @State private var requestedPresentation: Bool?
-    @State private var stagesInitialInsertion = true
+    @State private var occupiesLayout = false
+    @State private var surfaceVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
     }
 
-    private var isPresented: Bool {
-        return hasContent && (requestedPresentation ?? true)
+    private var presentationRequested: Bool {
+        isChromeExpanded && hasContent && (requestedPresentation ?? true)
     }
 
     private var hasContent: Bool {
         contentSize.width > 0 && contentSize.height > 0
-    }
-
-    private var currentWidth: CGFloat {
-        guard hasContent else { return 0 }
-        return isPresented
-            ? presentedSize.width
-            : presentedSize.width * style.motion.resolvedCollapsedWidthFraction
-    }
-
-    private var currentHeight: CGFloat {
-        isPresented ? presentedSize.height + style.gap : 0
     }
 
     private var presentedSize: CGSize {
@@ -41,14 +33,6 @@ struct NookAttachedAccessoryHost: View {
             width: contentSize.width + style.contentInsets.leading + style.contentInsets.trailing,
             height: contentSize.height + style.contentInsets.top + style.contentInsets.bottom
         )
-    }
-
-    private var presentationAnimation: Animation {
-        guard !reduceMotion else { return .easeOut(duration: 0.09) }
-        guard isPresented else { return style.motion.removalAnimation }
-        return stagesInitialInsertion
-            ? style.motion.insertionAnimation.delay(style.motion.initialInsertionDelay)
-            : style.motion.insertionAnimation
     }
 
     var body: some View {
@@ -65,30 +49,76 @@ struct NookAttachedAccessoryHost: View {
                 }
             }
             .clipShape(shape)
-            // Keep the visual separation from the main nook throughout the reveal.
-            // The outer frame clips the transparent gap and the shelf together, so the
-            // accessory never reads as physically fused to the primary surface.
+            // Keep the gap inside the retained layout. While the nook closes, the host
+            // remains in this VStack long enough for its y-position to follow the
+            // shrinking chrome instead of being frozen by a removal transition.
             .padding(.top, hasContent ? style.gap : 0)
             .frame(
-                width: currentWidth,
-                height: currentHeight,
+                width: occupiesLayout ? presentedSize.width : 0,
+                height: occupiesLayout ? presentedSize.height + style.gap : 0,
                 alignment: .top
             )
             .clipped()
             .contentShape(shape)
-            .offset(y: isPresented || reduceMotion ? 0 : style.motion.insertionOffset)
-            .allowsHitTesting(isPresented)
-            .accessibilityHidden(!isPresented)
-            .animation(presentationAnimation, value: isPresented)
+            .opacity(surfaceVisible ? 1 : 0)
+            .blur(radius: surfaceVisible || reduceMotion ? 0 : style.motion.blurRadius)
+            .allowsHitTesting(surfaceVisible)
+            .accessibilityHidden(!surfaceVisible)
             .onPreferenceChange(NookAttachedAccessoryPresentationPreferenceKey.self) {
                 requestedPresentation = $0
             }
-            .task {
-                // The host is mounted as the main nook starts expanding. Content measured
-                // in this short window belongs to the same reveal and should enter near the
-                // end of that motion. Content that appears later remains immediate.
-                try? await Task.sleep(for: .milliseconds(80))
-                stagesInitialInsertion = false
+            .task(id: presentationRequested) {
+                await updatePresentation(presentationRequested)
             }
+    }
+
+    @MainActor
+    private func updatePresentation(_ shouldPresent: Bool) async {
+        if shouldPresent {
+            // Reserve the shelf's final layout immediately but keep it visually absent.
+            // Its y-position now follows the nook's own expanding geometry, and only the
+            // subtle surface reveal is delayed until the primary motion is nearly done.
+            let transaction = Transaction(animation: nil)
+            withTransaction(transaction) {
+                occupiesLayout = true
+                surfaceVisible = false
+            }
+
+            guard !reduceMotion else {
+                surfaceVisible = true
+                return
+            }
+
+            try? await Task.sleep(for: .seconds(max(style.motion.revealDelay, 0)))
+            guard !Task.isCancelled else { return }
+            withAnimation(style.motion.revealAnimation) {
+                surfaceVisible = true
+            }
+            return
+        }
+
+        let wasFollowingChrome = !isChromeExpanded && occupiesLayout
+        let dismissalAnimation: Animation =
+            reduceMotion
+            ? .easeOut(duration: 0.09)
+            : style.motion.dismissalAnimation
+        withAnimation(dismissalAnimation) {
+            surfaceVisible = false
+        }
+
+        guard occupiesLayout else { return }
+        let retention =
+            wasFollowingChrome
+            ? chromeDismissalRetention
+            : Duration.seconds(max(style.motion.dismissalDuration, 0))
+        try? await Task.sleep(for: retention)
+        guard !Task.isCancelled else { return }
+
+        // By now the shelf is visually gone. Releasing its layout without animation
+        // cannot create the vertical squash that the user just watched us remove.
+        let transaction = Transaction(animation: nil)
+        withTransaction(transaction) {
+            occupiesLayout = false
+        }
     }
 }

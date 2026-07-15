@@ -121,17 +121,14 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
         VStack(spacing: 0) {
             notchChrome
 
-            if nook.state == .expanded, let accessory = nook.attachedAccessoryContent {
+            if let accessory = nook.attachedAccessoryContent {
                 NookAttachedAccessoryHost(
                     content: accessory,
                     backdrop: nook.backdrop,
-                    style: nook.attachedAccessoryStyle
+                    style: nook.attachedAccessoryStyle,
+                    isChromeExpanded: nook.state == .expanded,
+                    chromeDismissalRetention: nook.intermediateHideDuration
                 )
-                // The host owns insertion after its semantic content has been measured.
-                // Applying another insertion transition here makes the accessory animate
-                // twice and visually trail the main nook. Removal still follows the nook's
-                // closing transaction so both surfaces leave as one composition.
-                .transition(attachedAccessoryRemovalTransition)
             }
         }
         .fixedSize()
@@ -157,21 +154,9 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                 compactHoverAdmission.ended()
             }
             .offset(x: xOffset)
-            // Floating mode drops the panel below the menu bar; notch mode keeps it
-            // flush to the top edge (inset 0). Applied outside the clipped chrome so it
-            // shifts the whole shape without distorting it or the hover region.
-    }
-
-    private var attachedAccessoryRemovalTransition: AnyTransition {
-        if reduceMotion {
-            return .asymmetric(insertion: .identity, removal: .opacity)
-        }
-        return .asymmetric(
-            insertion: .identity,
-            removal: .nookAttachedAccessoryCollapse(
-                motion: nook.attachedAccessoryStyle.motion
-            )
-        )
+        // Floating mode drops the panel below the menu bar; notch mode keeps it
+        // flush to the top edge (inset 0). Applied outside the clipped chrome so it
+        // shifts the whole shape without distorting it or the hover region.
     }
 
     /// Peripheral cue overlay. Sits above backdrop+content but inside the compositing group,

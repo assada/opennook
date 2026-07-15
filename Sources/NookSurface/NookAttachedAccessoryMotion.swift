@@ -5,50 +5,34 @@ import SwiftUI
 
 /// Motion tokens for content attached to an expanded nook.
 ///
-/// The accessory is a secondary surface, so it should arrive slightly ahead of
-/// the main nook's settling tail instead of appearing to chase it.
+/// The accessory's position is driven by the nook's own layout animation. These
+/// tokens control only the secondary surface's delayed reveal and disappearance;
+/// they deliberately do not add an independent slide or geometry collapse.
 public struct NookAttachedAccessoryMotion: Equatable, Sendable {
-    public var insertionOffset: CGFloat
-    public var collapsedWidthFraction: CGFloat
-    public var initialInsertionDelay: TimeInterval
-    public var insertionResponse: TimeInterval
-    public var insertionDampingFraction: Double
-    public var insertionBlendDuration: TimeInterval
-    public var removalDuration: TimeInterval
+    public var revealDelay: TimeInterval
+    public var revealDuration: TimeInterval
+    public var dismissalDuration: TimeInterval
+    public var blurRadius: CGFloat
 
     public init(
-        insertionOffset: CGFloat = -4,
-        collapsedWidthFraction: CGFloat = 0.78,
-        initialInsertionDelay: TimeInterval = 0.18,
-        insertionResponse: TimeInterval = 0.23,
-        insertionDampingFraction: Double = 0.92,
-        insertionBlendDuration: TimeInterval = 0.03,
-        removalDuration: TimeInterval = 0.14
+        revealDelay: TimeInterval = 0.22,
+        revealDuration: TimeInterval = 0.16,
+        dismissalDuration: TimeInterval = 0.20,
+        blurRadius: CGFloat = 5
     ) {
-        self.insertionOffset = insertionOffset
-        self.collapsedWidthFraction = collapsedWidthFraction
-        self.initialInsertionDelay = initialInsertionDelay
-        self.insertionResponse = insertionResponse
-        self.insertionDampingFraction = insertionDampingFraction
-        self.insertionBlendDuration = insertionBlendDuration
-        self.removalDuration = removalDuration
+        self.revealDelay = revealDelay
+        self.revealDuration = revealDuration
+        self.dismissalDuration = dismissalDuration
+        self.blurRadius = blurRadius
     }
 
     public static let standard = NookAttachedAccessoryMotion()
 
-    var resolvedCollapsedWidthFraction: CGFloat {
-        min(max(collapsedWidthFraction, 0.01), 1)
+    var revealAnimation: Animation {
+        .smooth(duration: max(revealDuration, 0))
     }
 
-    var insertionAnimation: Animation {
-        .spring(
-            response: insertionResponse,
-            dampingFraction: insertionDampingFraction,
-            blendDuration: insertionBlendDuration
-        )
-    }
-
-    var removalAnimation: Animation {
-        .easeIn(duration: removalDuration)
+    var dismissalAnimation: Animation {
+        .smooth(duration: max(dismissalDuration, 0))
     }
 }
