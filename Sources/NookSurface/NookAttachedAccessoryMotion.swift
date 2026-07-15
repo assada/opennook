@@ -42,6 +42,6 @@ public struct NookAttachedAccessoryMotion: Equatable, Sendable {
     }
 
     var removalAnimation: Animation {
-        .easeOut(duration: removalDuration)
+        .easeIn(duration: removalDuration)
     }
 }
