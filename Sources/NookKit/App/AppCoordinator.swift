@@ -989,12 +989,19 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Flips the persisted "stay expanded on hover-exit" preference and projects the new
-    /// value onto the surface immediately. Backed by ``NookAppearancePreferences/keepNookOpen``,
-    /// so the choice survives across launches.
+    /// Flips the persisted "stay expanded on hover-exit" preference through the same
+    /// setter used by host-owned Settings surfaces.
     public func toggleKeepNookOpen() {
-        appState.keepNookOpen.toggle()
-        surface.staysExpandedOnHoverExit = appState.keepNookOpen
+        setKeepNookOpen(!appState.keepNookOpen)
+    }
+
+    /// Persists the "stay expanded on hover-exit" preference and immediately projects
+    /// it onto the live surface. Host Settings and the built-in top bar must use this
+    /// API instead of writing ``AppState/keepNookOpen`` directly so visible state and
+    /// hover behavior cannot drift apart.
+    public func setKeepNookOpen(_ enabled: Bool) {
+        appState.keepNookOpen = enabled
+        setStaysExpandedOverride(presentationPinning.isPinned)
     }
 
     /// Projects the boolean "ignore hover-exit auto-compact" override onto the surface.
