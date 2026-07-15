@@ -127,7 +127,11 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
                     backdrop: nook.backdrop,
                     style: nook.attachedAccessoryStyle
                 )
-                .transition(attachedAccessoryTransition)
+                // The host owns insertion after its semantic content has been measured.
+                // Applying another insertion transition here makes the accessory animate
+                // twice and visually trail the main nook. Removal still follows the nook's
+                // closing transaction so both surfaces leave as one composition.
+                .transition(attachedAccessoryRemovalTransition)
             }
         }
         .fixedSize()
@@ -158,12 +162,15 @@ where Expanded: View, CompactLeading: View, CompactTrailing: View {
             // shifts the whole shape without distorting it or the hover region.
     }
 
-    private var attachedAccessoryTransition: AnyTransition {
+    private var attachedAccessoryRemovalTransition: AnyTransition {
         if reduceMotion {
-            return .opacity
+            return .asymmetric(insertion: .identity, removal: .opacity)
         }
-        return .offset(y: nook.attachedAccessoryStyle.insertionOffset)
-            .combined(with: .opacity)
+        return .asymmetric(
+            insertion: .identity,
+            removal: .offset(y: nook.attachedAccessoryStyle.motion.insertionOffset / 2)
+                .combined(with: .opacity)
+        )
     }
 
     /// Peripheral cue overlay. Sits above backdrop+content but inside the compositing group,

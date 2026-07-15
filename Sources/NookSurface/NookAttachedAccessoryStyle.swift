@@ -11,26 +11,19 @@ public struct NookAttachedAccessoryStyle: Equatable, Sendable {
     public var gap: CGFloat
     public var cornerRadius: CGFloat
     public var contentInsets: NookEdgeInsets
-    public var insertionOffset: CGFloat
-    public var animationDuration: TimeInterval
+    public var motion: NookAttachedAccessoryMotion
 
     public init(
         gap: CGFloat = 8,
         cornerRadius: CGFloat = 16,
         contentInsets: NookEdgeInsets = .init(top: 10, bottom: 10, leading: 12, trailing: 12),
-        insertionOffset: CGFloat = -6,
-        animationDuration: TimeInterval = 0.22
+        motion: NookAttachedAccessoryMotion = .standard
     ) {
         self.gap = gap
         self.cornerRadius = cornerRadius
         self.contentInsets = contentInsets
-        self.insertionOffset = insertionOffset
-        self.animationDuration = animationDuration
+        self.motion = motion
     }
 
     public static let standard = NookAttachedAccessoryStyle()
-
-    var animation: Animation {
-        .spring(duration: animationDuration, bounce: 0.12)
-    }
 }

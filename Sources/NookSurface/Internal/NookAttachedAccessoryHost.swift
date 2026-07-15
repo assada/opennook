@@ -19,6 +19,11 @@ struct NookAttachedAccessoryHost: View {
         contentSize.width > 0 && contentSize.height > 0
     }
 
+    private var presentationAnimation: Animation {
+        guard !reduceMotion else { return .easeOut(duration: 0.09) }
+        return isPresented ? style.motion.insertionAnimation : style.motion.removalAnimation
+    }
+
     var body: some View {
         content
             .onGeometryChange(for: CGSize.self, of: \.size) { contentSize = $0 }
@@ -36,8 +41,8 @@ struct NookAttachedAccessoryHost: View {
             .contentShape(shape)
             .fixedSize()
             .opacity(isPresented ? 1 : 0)
-            .offset(y: isPresented || reduceMotion ? 0 : style.insertionOffset)
+            .offset(y: isPresented || reduceMotion ? 0 : style.motion.insertionOffset)
             .padding(.top, isPresented ? style.gap : 0)
-            .animation(reduceMotion ? .easeOut(duration: 0.12) : style.animation, value: isPresented)
+            .animation(presentationAnimation, value: isPresented)
     }
 }
