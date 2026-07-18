@@ -199,9 +199,37 @@ environment value and shared services from `\.appServices`.
 alongside it; `AppServices` (`Sources/NookKit/App/AppServices.swift`) is the
 dependency container threaded into views.
 
-**4. Drive the chrome** through `AppCoordinator` - `showNook()`, `hideNook()`,
-`toggleNook()`, `toggleKeepNookOpen()` are the lifecycle vocabulary; the global
-hotkey and menu-bar fallback already call into them.
+**4. Drive the chrome** through `AppCoordinator` - `showNook()`, `showHome()`,
+`hideNook()`, `toggleNook()`, and `toggleKeepNookOpen()` are the lifecycle
+vocabulary; the global hotkey and menu-bar fallback already call into them.
+
+User-driven calls stay expanded by default. For a background result that should
+surface itself without lingering forever, opt that one presentation into unattended
+auto-compact:
+
+```swift
+resultPipeline.onResult = {
+    coordinator.showHome(
+        presentation: .unattended(timeout: .seconds(8))
+    )
+}
+```
+
+If the pointer never enters the expanded nook, it compacts after the timeout. The
+first pointer entry, file drag, keep-open action, or presentation pin cancels the
+deadline for that expansion; a later pointer exit then compacts immediately through
+the normal hover lifecycle. Repeated unattended presentations move the single
+deadline forward.
+
+The default `.userInitiated` behavior has no timer, so the framework's global hotkey
+and keyboard-driven workflows remain under explicit user control. A custom peek
+shortcut can opt in deliberately:
+
+```swift
+coordinator.toggleNook(
+    presentation: .unattended(timeout: .seconds(8))
+)
+```
 
 Rename the product (`Nook` -> your app) by editing `project.yml`,
 `App/Info.plist`, and the `Package.swift` product name when you're ready to

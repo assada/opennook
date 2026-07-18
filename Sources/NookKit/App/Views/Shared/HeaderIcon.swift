@@ -93,6 +93,8 @@ struct HeaderIcon: View {
             Image(systemName: systemName)
                 .font(typography.headerIcon)
                 .foregroundStyle(color)
+                .contentTransition(.symbolEffect(.replace))
+                .animation(.easeOut(duration: 0.16), value: systemName)
         }
     }
 }

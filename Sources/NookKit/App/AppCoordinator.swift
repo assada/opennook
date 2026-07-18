@@ -104,7 +104,7 @@ public final class AppCoordinator: ObservableObject {
     ///
     /// Read/written via ``setUserInitiatedOpen(_:)`` so changes publish through
     /// ``userInitiatedOpenSubject`` for ``userEngagementChanges``.
-    private var userInitiatedOpen: Bool = false
+    var userInitiatedOpen: Bool = false
 
     /// Backing publisher for ``userInitiatedOpen``; combined with the surface's hover
     /// publisher to drive ``userEngagementChanges``.
@@ -119,7 +119,7 @@ public final class AppCoordinator: ObservableObject {
 
     /// Single setter for ``userInitiatedOpen`` that publishes through
     /// ``userInitiatedOpenSubject``. Idempotent: a no-op when the value is unchanged.
-    private func setUserInitiatedOpen(_ value: Bool) {
+    func setUserInitiatedOpen(_ value: Bool) {
         guard userInitiatedOpen != value else { return }
         userInitiatedOpen = value
         userInitiatedOpenSubject.send(value)
@@ -136,6 +136,11 @@ public final class AppCoordinator: ObservableObject {
     /// independent `Task` whose `await`s interleave, settling the surface in the
     /// opposite state from the user's last action.
     private var lifecycleTail: Task<Void, Never>?
+
+    /// Per-presentation attention window for an automatically opened surface. Kept in
+    /// a focused controller so AppCoordinator owns policy without accumulating timer
+    /// implementation details.
+    let unattendedExpansionController = NookUnattendedExpansionController()
 
     /// Tail of the *off-chain* switch-quiesce drains. A module switch flips identity
     /// inside the serial lifecycle chain (fast - no user-visible stall) and runs the
@@ -330,6 +335,7 @@ public final class AppCoordinator: ObservableObject {
         // it being live from the moment the coordinator exists - including in tests
         // that construct a coordinator without calling `start()`.
         bindSurfaceVisibility()
+        bindUnattendedExpansion()
         // Likewise bind the presentation-pin projection at init: tests that exercise
         // `pin()`/`release()` against a windowless coordinator depend on the
         // `staysExpandedOnHoverExit` override flipping without going through `start()`.
@@ -886,8 +892,11 @@ public final class AppCoordinator: ObservableObject {
     /// Toggles the expanded/compact state of the surface based on its live state at the
     /// moment the transition reaches the head of the serial lifecycle chain. A
     /// hover-expanded nook collapses; a compact nook expands.
-    public func toggleNook() {
+    public func toggleNook(
+        presentation: NookExpansionBehavior = .userInitiated
+    ) {
         appState.resetTransientStatus()
+        unattendedExpansionController.cancel()
         enqueueLifecycle { [weak self] in
             guard let self else { return }
             // Decide off the surface's live state *at execution time*, not the mirror
@@ -898,22 +907,22 @@ public final class AppCoordinator: ObservableObject {
                 self.setUserInitiatedOpen(false)
                 await self.surface.compact(on: nil)
             } else {
-                self.setUserInitiatedOpen(true)
-                self.surface.staysExpandedOnHoverExit = self.appState.keepNookOpen
-                await self.surface.expand(on: nil)
+                await self.expandNook(presentation: presentation)
             }
         }
     }
 
-    /// Expands the surface and marks the open as user-initiated, so a subsequent transient
-    /// presenter is gated by ``isUserEngaged``.
-    public func showNook() {
+    /// Expands the surface using per-presentation ownership semantics. Explicit calls
+    /// remain user-initiated by default; pass `.unattended` for a background result that
+    /// should compact if the user never engages it.
+    public func showNook(
+        presentation: NookExpansionBehavior = .userInitiated
+    ) {
         appState.resetTransientStatus()
+        prepareQueuedExpansion(presentation)
         enqueueLifecycle { [weak self] in
             guard let self else { return }
-            self.setUserInitiatedOpen(true)
-            self.surface.staysExpandedOnHoverExit = self.appState.keepNookOpen
-            await self.surface.expand(on: nil)
+            await self.expandNook(presentation: presentation)
         }
     }
 
@@ -924,10 +933,13 @@ public final class AppCoordinator: ObservableObject {
         surface.noteCompactActivity()
     }
 
-    /// Switches to the home view and expands the surface.
-    public func showHome() {
+    /// Switches to the home view and expands the surface with the requested ownership
+    /// semantics. The default is persistent user intent for source compatibility.
+    public func showHome(
+        presentation: NookExpansionBehavior = .userInitiated
+    ) {
         appState.showHome()
-        showNook()
+        showNook(presentation: presentation)
     }
 
     /// Shows the Settings screen. When the host disabled Settings
@@ -949,6 +961,7 @@ public final class AppCoordinator: ObservableObject {
     /// Compacts the surface back into the pill. Clears the user-initiated-open flag
     /// synchronously so any subsequent transient presenter is no longer gated.
     public func hideNook() {
+        unattendedExpansionController.cancel()
         enqueueLifecycle { [weak self] in
             guard let self else { return }
             self.setUserInitiatedOpen(false)
@@ -967,6 +980,7 @@ public final class AppCoordinator: ObservableObject {
 
     /// Fully hides the surface and tears down its window.
     public func dismissNook() {
+        unattendedExpansionController.cancel()
         enqueueLifecycle { [weak self] in
             guard let self else { return }
             self.setUserInitiatedOpen(false)
@@ -989,12 +1003,22 @@ public final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Flips the persisted "stay expanded on hover-exit" preference and projects the new
-    /// value onto the surface immediately. Backed by ``NookAppearancePreferences/keepNookOpen``,
-    /// so the choice survives across launches.
+    /// Flips the persisted "stay expanded on hover-exit" preference through the same
+    /// setter used by host-owned Settings surfaces.
     public func toggleKeepNookOpen() {
-        appState.keepNookOpen.toggle()
-        surface.staysExpandedOnHoverExit = appState.keepNookOpen
+        setKeepNookOpen(!appState.keepNookOpen)
+    }
+
+    /// Persists the "stay expanded on hover-exit" preference and immediately projects
+    /// it onto the live surface. Host Settings and the built-in top bar must use this
+    /// API instead of writing ``AppState/keepNookOpen`` directly so visible state and
+    /// hover behavior cannot drift apart.
+    public func setKeepNookOpen(_ enabled: Bool) {
+        appState.keepNookOpen = enabled
+        if enabled {
+            unattendedExpansionController.cancel()
+        }
+        setStaysExpandedOverride(presentationPinning.isPinned)
     }
 
     /// Projects the boolean "ignore hover-exit auto-compact" override onto the surface.
